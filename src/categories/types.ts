@@ -7,14 +7,16 @@ export interface FormatDef {
   ext: string;
   mime: string;
   hint?: string;
+  /** Input extensions (lowercase, no dot) this format can be produced from. Omitted = any. */
+  from?: string[];
 }
 
 interface FieldBase {
   key: string;
   label: string;
   hint?: string;
-  /** Show the field only when this returns true. */
-  visible?: (options: Options, format: string) => boolean;
+  /** Show the field only when this returns true. `inputs` = extensions of the added files. */
+  visible?: (options: Options, format: string, inputs: Set<string>) => boolean;
 }
 
 export type FieldDef =
@@ -33,6 +35,19 @@ export interface BuildContext {
   duration?: number;
 }
 
+export interface ConvertContext {
+  file: File;
+  format: FormatDef;
+  options: Options;
+  onProgress: (ratio: number) => void;
+}
+
+export interface ConvertOutput {
+  blob: Blob;
+  /** File name including extension. */
+  name: string;
+}
+
 export interface Category {
   id: string;
   title: string;
@@ -47,6 +62,11 @@ export interface Category {
   fields: FieldDef[];
   /** ffmpeg arguments between `-i` handling and the output path. */
   buildArgs?: (ctx: BuildContext) => string[];
+  /** Custom (non-ffmpeg) converter. Used instead of `buildArgs` when present. */
+  convert?: (ctx: ConvertContext) => Promise<ConvertOutput>;
+  /** Combines several results into one file (e.g. merge PDFs), when `canMerge` says so. */
+  merge?: (outputs: ConvertOutput[], options: Options) => Promise<ConvertOutput>;
+  canMerge?: (format: string, options: Options) => boolean;
   /** Optional per-format option overrides applied when the format is picked. */
   formatDefaults?: Record<string, Options>;
   /** Whether the category needs the media duration (e.g. for target-size mode). */

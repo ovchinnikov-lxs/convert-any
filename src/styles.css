@@ -247,3 +247,9 @@ kbd {
   .seg { order: 2; }
 }
 .btn kbd { margin-left: 6px; }
+.thumb .ext {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.03em; color: var(--accent);
+  background: var(--accent-soft); padding: 2px 5px; border-radius: 5px;
+}
+.format:disabled:not(.active) { opacity: 0.35; }
+.thumb:has(.ext) { background: var(--bg); }

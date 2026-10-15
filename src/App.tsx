@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { categories } from './categories';
+import { extOf } from './categories/document';
 import { parseTime } from './categories/video';
 import type { Category, Options, OptionValue } from './categories/types';
 import { CompareViewer, type CompareItem } from './components/CompareViewer';
@@ -27,6 +28,8 @@ interface Job {
     fps: number;
   };
   previewUrl?: string;
+  /** A combined output (e.g. merged PDF), not a source file. */
+  merged?: boolean;
 }
 
 type EngineState = { state: 'idle' | 'loading' | 'ready' | 'error'; progress: number; error?: string };
@@ -51,6 +54,14 @@ export default function App() {
   const category = categories.find((c) => c.id === categoryId)!;
   const { format, options } = settings[categoryId];
   const categoryJobs = useMemo(() => jobs.filter((j) => j.categoryId === categoryId), [jobs, categoryId]);
+  const sourceJobs = useMemo(() => categoryJobs.filter((j) => !j.merged), [categoryJobs]);
+  const inputs = useMemo(() => new Set(sourceJobs.map((j) => extOf(j.file.name))), [sourceJobs]);
+  const usesFFmpeg = Boolean(category.buildArgs && !category.convert);
+  const compatible = (fmtId: string, ext: string) => {
+    const from = category.formats.find((f) => f.id === fmtId)?.from;
+    return !from || from.includes(ext);
+  };
+  const formatAvailable = (fmtId: string) => !inputs.size || [...inputs].some((e) => compatible(fmtId, e));
 
   const patchJob = useCallback((id: number, patch: Partial<Job>) => {
     setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
@@ -79,8 +90,16 @@ export default function App() {
     }));
     setJobs((js) => [...js, ...added]);
     // Start fetching the engine in the background while the user picks settings.
-    ensureEngine().catch(() => {});
+    if (usesFFmpeg) ensureEngine().catch(() => {});
   };
+
+  // When the chosen format can't be made from any of the added files, switch to one that can.
+  useEffect(() => {
+    if (!inputs.size || formatAvailable(format)) return;
+    const next = category.formats.find((f) => formatAvailable(f.id));
+    if (next) setFormat(next.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputs, format, categoryId]);
 
   const removeJob = (id: number) => {
     setJobs((js) => {
@@ -110,8 +129,20 @@ export default function App() {
 
   const convertJob = async (job: Job, cat: Category, fmtId: string, opts: Options) => {
     const fmt = cat.formats.find((f) => f.id === fmtId)!;
-    const outName = `${baseName(job.file.name)}.${fmt.ext}`;
+    const ext = extOf(job.file.name);
+    if (fmt.from && !fmt.from.includes(ext)) {
+      throw new Error(`${ext ? '.' + ext.toUpperCase() : 'Этот файл'} нельзя сконвертировать в ${fmt.label}`);
+    }
     patchJob(job.id, { status: 'running', progress: 0, error: undefined });
+
+    if (cat.convert) {
+      const out = await cat.convert({ file: job.file, format: fmt, options: opts, onProgress: (p) => patchJob(job.id, { progress: p }) });
+      if (cancelled.current) throw new Error('cancelled');
+      setResult(job, out.blob, out.name, fmt.label);
+      return out;
+    }
+
+    const outName = `${baseName(job.file.name)}.${fmt.ext}`;
 
     const run = (file: File) =>
       runFFmpeg({
@@ -135,23 +166,24 @@ export default function App() {
     }
 
     const blob = new Blob([data as BlobPart], { type: fmt.mime });
+    setResult(job, blob, outName, fmt.label, {
+      offset: cat.id === 'video' ? (parseTime(opts.start) ?? 0) : 0,
+      fps: Number(opts.fps) || fps || 30,
+    });
+    return { blob, name: outName };
+  };
+
+  const setResult = (job: Job, blob: Blob, name: string, label: string, extra = { offset: 0, fps: 30 }) => {
     if (job.result) URL.revokeObjectURL(job.result.url);
     patchJob(job.id, {
       status: 'done',
       progress: 1,
-      result: {
-        blob,
-        url: URL.createObjectURL(blob),
-        name: outName,
-        format: fmt.label,
-        offset: cat.id === 'video' ? (parseTime(opts.start) ?? 0) : 0,
-        fps: Number(opts.fps) || fps || 30,
-      },
+      result: { blob, url: URL.createObjectURL(blob), name, format: label, ...extra },
     });
   };
 
   const convertAll = async (only?: number) => {
-    const pending = categoryJobs.filter((j) => (only ? j.id === only : j.status !== 'running'));
+    const pending = sourceJobs.filter((j) => (only ? j.id === only : j.status !== 'running'));
     const queue = only ? pending : pending.some((j) => j.status !== 'done') ? pending.filter((j) => j.status !== 'done') : pending;
     if (!queue.length) return;
     const cat = category;
@@ -160,12 +192,13 @@ export default function App() {
     setBusy(true);
     cancelled.current = false;
     queue.forEach((j) => patchJob(j.id, { status: 'queued', progress: 0, error: undefined }));
+    const outputs: { blob: Blob; name: string }[] = [];
     try {
-      await ensureEngine();
+      if (cat.buildArgs && !cat.convert) await ensureEngine();
       for (const job of queue) {
         if (cancelled.current) break;
         try {
-          await convertJob(job, cat, fmt, opts);
+          outputs.push(await convertJob(job, cat, fmt, opts));
         } catch (e) {
           if (cancelled.current) {
             patchJob(job.id, { status: 'queued', progress: 0 });
@@ -174,11 +207,32 @@ export default function App() {
           patchJob(job.id, { status: 'error', error: (e as Error).message || 'Ошибка конвертации' });
         }
       }
+      if (!only && !cancelled.current && cat.merge && cat.canMerge?.(fmt, opts) && outputs.length > 1) {
+        await addMerged(cat, await cat.merge(outputs, opts));
+      }
     } catch {
       // engine failed to load; state already reflects it
     } finally {
       setBusy(false);
     }
+  };
+
+  const addMerged = async (cat: Category, out: { blob: Blob; name: string }) => {
+    const file = new File([out.blob], out.name, { type: out.blob.type });
+    const label = cat.formats.find((f) => f.ext === extOf(out.name))?.label ?? '';
+    setJobs((js) => [
+      // Replace a previous merged result of this category.
+      ...js.filter((j) => !(j.merged && j.categoryId === cat.id)),
+      {
+        id: nextId++,
+        categoryId: cat.id,
+        file,
+        status: 'done',
+        progress: 1,
+        merged: true,
+        result: { blob: out.blob, url: URL.createObjectURL(out.blob), name: out.name, format: label, offset: 0, fps: 30 },
+      },
+    ]);
   };
 
   const cancel = () => {
@@ -188,7 +242,7 @@ export default function App() {
     setJobs((js) => js.map((j) => (j.status === 'running' ? { ...j, status: 'queued', progress: 0 } : j)));
   };
 
-  const doneJobs = categoryJobs.filter((j) => j.result);
+  const doneJobs = sourceJobs.filter((j) => j.result);
   const totals = doneJobs.reduce(
     (acc, j) => ({ before: acc.before + j.file.size, after: acc.after + j.result!.blob.size }),
     { before: 0, after: 0 },
@@ -212,7 +266,7 @@ export default function App() {
             <p>Конвертер файлов прямо в браузере</p>
           </div>
         </div>
-        <div className="privacy" title="Конвертация выполняется ffmpeg, скомпилированным в WebAssembly, на вашем устройстве">
+        <div className="privacy" title="Конвертация выполняется в вашем браузере (WebAssembly и JavaScript) — без загрузки на сервер">
           🔒 Файлы не покидают ваше устройство
         </div>
       </header>
@@ -273,7 +327,7 @@ export default function App() {
               <button
                 className="btn ghost"
                 onClick={async () => {
-                  for (const j of doneJobs) {
+                  for (const j of categoryJobs.filter((x) => x.result)) {
                     downloadBlob(j.result!.blob, j.result!.name);
                     await new Promise((r) => setTimeout(r, 300));
                   }
@@ -293,8 +347,8 @@ export default function App() {
                 key={f.id}
                 className={`format${f.id === format ? ' active' : ''}`}
                 onClick={() => setFormat(f.id)}
-                title={f.hint}
-                disabled={busy}
+                title={formatAvailable(f.id) ? f.hint : `Недоступно для добавленных файлов. ${f.hint ?? ''}`}
+                disabled={busy || !formatAvailable(f.id)}
               >
                 {f.label}
               </button>
@@ -306,7 +360,7 @@ export default function App() {
 
           <h2>Настройки</h2>
           <fieldset disabled={busy}>
-            <OptionsPanel category={category} format={format} options={options} onChange={setOption} />
+            <OptionsPanel category={category} format={format} options={options} inputs={inputs} onChange={setOption} />
           </fieldset>
 
           <EngineStatus engine={engine} />
@@ -316,8 +370,8 @@ export default function App() {
               Остановить
             </button>
           ) : (
-            <button className="btn primary big" disabled={!categoryJobs.length} onClick={() => convertAll()}>
-              Конвертировать{categoryJobs.length ? ` (${categoryJobs.length})` : ''}
+            <button className="btn primary big" disabled={!sourceJobs.length} onClick={() => convertAll()}>
+              Конвертировать{sourceJobs.length ? ` (${sourceJobs.length})` : ''}
             </button>
           )}
         </aside>
@@ -326,7 +380,8 @@ export default function App() {
       {compare && <CompareViewer item={compare} engineFree={!busy} onClose={() => setCompare(null)} />}
 
       <footer className="footer">
-        Работает на <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noreferrer">ffmpeg.wasm</a>.
+        Работает на <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noreferrer">ffmpeg.wasm</a>, pdf.js,
+        pdf-lib, SheetJS и mammoth.
         Вся обработка выполняется локально — без серверов и загрузок.
       </footer>
     </div>
@@ -366,23 +421,38 @@ function JobRow({
   onRetry: () => void;
   onCompare: () => void;
 }) {
-  const comparable = job.result && !job.result.blob.type.startsWith('audio/');
+  const comparable =
+    job.result && ['image', 'video'].includes(job.categoryId) && !job.result.blob.type.startsWith('audio/');
   const thumb = job.result?.blob.type.startsWith('image/') ? job.result.url : job.previewUrl;
+  const ext = extOf(job.file.name);
   return (
     <li className={`job ${job.status}`}>
       <div className="thumb">
-        {thumb ? <img src={thumb} alt="" /> : <span>{job.file.type.startsWith('video') ? '🎬' : '📄'}</span>}
+        {thumb ? (
+          <img src={thumb} alt="" />
+        ) : job.file.type.startsWith('video') ? (
+          <span>🎬</span>
+        ) : (
+          <span className="ext">{ext.slice(0, 4).toUpperCase() || '📄'}</span>
+        )}
       </div>
       <div className="job-main">
         <div className="job-name" title={job.file.name}>
           {job.file.name}
         </div>
         <div className="job-meta">
-          {formatBytes(job.file.size)}
-          {job.result && (
+          {job.merged ? (
+            <>
+              <strong>{formatBytes(job.file.size)}</strong> · объединённый результат
+            </>
+          ) : (
+            formatBytes(job.file.size)
+          )}
+          {job.result && !job.merged && (
             <>
               {' → '}
-              <strong>{formatBytes(job.result.blob.size)}</strong> {job.result.format}{' '}
+              <strong>{formatBytes(job.result.blob.size)}</strong>{' '}
+              {job.categoryId === 'docs' ? job.result.name : job.result.format}{' '}
               <SizeDelta before={job.file.size} after={job.result.blob.size} />
             </>
           )}

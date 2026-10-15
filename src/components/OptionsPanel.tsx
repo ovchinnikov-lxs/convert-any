@@ -4,11 +4,12 @@ interface Props {
   category: Category;
   format: string;
   options: Options;
+  inputs: Set<string>;
   onChange: (key: string, value: OptionValue) => void;
 }
 
-export function OptionsPanel({ category, format, options, onChange }: Props) {
-  const fields = category.fields.filter((f) => !f.visible || f.visible(options, format));
+export function OptionsPanel({ category, format, options, inputs, onChange }: Props) {
+  const fields = category.fields.filter((f) => !f.visible || f.visible(options, format, inputs));
   if (!fields.length) return null;
   return (
     <div className="options">
@@ -75,7 +76,7 @@ export function OptionsPanel({ category, format, options, onChange }: Props) {
           case 'checkbox':
             return (
               <label className="field checkbox" key={f.key}>
-                <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(f.key, e.target.checked)} />
+                <input id={id} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(f.key, e.target.checked)} />
                 <span>{f.label}</span>
               </label>
             );

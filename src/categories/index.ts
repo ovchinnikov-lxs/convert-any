@@ -1,4 +1,5 @@
 import type { Category } from './types';
+import { documentCategory } from './document';
 import { imageCategory } from './image';
 import { videoCategory } from './video';
 
@@ -23,7 +24,7 @@ export const categories: Category[] = [
   imageCategory,
   videoCategory,
   soon('audio', 'Аудио', '🎵', 'MP3, WAV, OGG, FLAC, M4A'),
-  soon('docs', 'Документы', '📄', 'PDF, DOCX, TXT и другие'),
+  documentCategory,
   soon('archives', 'Архивы', '🗜️', 'ZIP, 7Z, TAR'),
 ];
 
