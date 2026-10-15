@@ -1,6 +1,6 @@
 import { LocalizedError, t } from '../i18n';
 
-/** Размер файла в человекочитаемом виде на текущем языке. */
+/** Human-readable file size in the current language. */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes)) return '—';
   const units = [t('unit.B'), t('unit.KB'), t('unit.MB'), t('unit.GB')];
@@ -13,13 +13,13 @@ export function formatBytes(bytes: number): string {
   return `${n.toFixed(n >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-/** Имя файла без расширения. */
+/** File name without extension. */
 export function baseName(name: string) {
   const i = name.lastIndexOf('.');
   return i > 0 ? name.slice(0, i) : name;
 }
 
-/** Декодирует изображение средствами браузера (например, AVIF/HEIC в Safari) и пересохраняет в PNG. */
+/** Decodes an image with the browser (e.g. AVIF/HEIC on Safari) and re-encodes it as PNG. */
 export async function browserDecodeToPng(file: File): Promise<File> {
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement('canvas');
@@ -32,7 +32,7 @@ export async function browserDecodeToPng(file: File): Promise<File> {
   return new File([blob], `${baseName(file.name)}.png`, { type: 'image/png' });
 }
 
-/** Скачивает Blob как файл с заданным именем. */
+/** Downloads a Blob as a file with the given name. */
 export function downloadBlob(blob: Blob, name: string) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

@@ -1,8 +1,8 @@
 import type { Dict } from './ru';
 
-/** Английский словарь. Тип `Dict` не даёт пропустить ни одного ключа из русского. */
+/** English dictionary. The `Dict` type makes sure no key from the Russian one is missing. */
 export const en: Dict = {
-  // --- Страница
+  // --- Page
   'meta.title': 'Convert Any — in-browser file converter',
   'meta.description': 'Convert images, video and documents right in your browser. Your files never leave your device.',
   'app.subtitle': 'File converter that runs in your browser',
@@ -24,7 +24,7 @@ export const en: Dict = {
   'app.footerAnd': 'and',
   'app.footerLocal': 'Everything is processed locally — no servers, no uploads.',
 
-  // --- Список файлов
+  // --- File list
   'drop.title': 'Drop files here',
   'drop.or': ' or click to choose',
   'drop.more': 'Add more files',
@@ -43,7 +43,7 @@ export const en: Dict = {
   'job.tight': 'already compressed',
   'job.tightTitle': 'The source bitrate is already low. Only a lower resolution or quality will noticeably shrink it.',
 
-  // --- Единицы
+  // --- Units
   'unit.B': 'B',
   'unit.KB': 'KB',
   'unit.MB': 'MB',
@@ -54,7 +54,7 @@ export const en: Dict = {
   'unit.mm': 'mm',
   'unit.kbpsN': '{n} kbps',
 
-  // --- Офлайн
+  // --- Offline
   'offline.noNet': 'No connection — working offline',
   'offline.preparing': 'Preparing offline mode…',
   'offline.ready': '✓ Works offline',
@@ -67,7 +67,7 @@ export const en: Dict = {
   'offline.afterConvert': 'After conversion',
   'offline.later': 'Later',
 
-  // --- Сравнение до/после
+  // --- Before / after
   'cmp.dialog': 'Before and after comparison',
   'cmp.modes': 'Comparison mode',
   'cmp.split': 'Slider',
@@ -100,7 +100,7 @@ export const en: Dict = {
   'cmp.frameN': 'frame {n}/{total}',
   'cmp.speed': 'Speed',
 
-  // --- Категории
+  // --- Categories
   'cat.image.title': 'Images',
   'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO — change format, compress, resize',
   'cat.video.title': 'Video',
@@ -108,7 +108,7 @@ export const en: Dict = {
   'cat.docs.title': 'Documents',
   'cat.docs.desc': 'PDF, DOCX, Markdown, HTML, TXT, XLSX/ODS/CSV spreadsheets — convert, compress and merge PDFs',
 
-  // --- Подсказки к форматам
+  // --- Format hints
   'hint.webp': 'Lightweight format for the web',
   'hint.png': 'Lossless, with transparency',
   'hint.jpg': 'Photos, no transparency',
@@ -132,7 +132,7 @@ export const en: Dict = {
   'hint.dcsv': 'Spreadsheet as text',
   'hint.djson': 'Table rows as objects',
 
-  // --- Настройки: общие и изображения
+  // --- Options: common and images
   'opt.quality': 'Quality',
   'opt.quality.hint': 'Lower — smaller file',
   'opt.lossless': 'Lossless',
@@ -147,7 +147,7 @@ export const en: Dict = {
   'opt.auto': 'auto',
   'opt.strip': 'Remove metadata (EXIF, GPS)',
 
-  // --- Настройки: видео
+  // --- Options: video
   'opt.mode': 'Compression mode',
   'opt.mode.quality': 'By quality',
   'opt.mode.size': 'Target file size',
@@ -170,7 +170,7 @@ export const en: Dict = {
   'opt.mute': 'Remove audio',
   'opt.abitrate': 'Audio bitrate',
 
-  // --- Настройки: документы
+  // --- Options: documents
   'opt.pdfMode': 'What to do with the PDF',
   'opt.pdfMode.optimize': 'Re-save losslessly',
   'opt.pdfMode.raster': 'Compress hard (pages → JPEG)',
@@ -204,7 +204,7 @@ export const en: Dict = {
   'opt.merge.hint': 'In the order of the file list',
   'docs.mergedName': 'merged',
 
-  // --- Ошибки
+  // --- Errors
   'err.load': 'Could not load {url}: {status}',
   'err.ffmpegCode': 'ffmpeg exited with code {code}',
   'err.empty': 'Empty result',

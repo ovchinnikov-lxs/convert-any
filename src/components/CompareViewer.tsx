@@ -4,22 +4,22 @@ import { t, useLang, type Key } from '../i18n';
 import { canPlayVideo, canShowImage, imageProxy, videoProxy } from '../lib/preview';
 import { formatBytes } from '../lib/utils';
 
-/** Что сравниваем: исходный файл и результат конвертации. */
+/** What to compare: the source file and the conversion result. */
 export interface CompareItem {
   kind: 'image' | 'video';
   original: File;
   result: Blob;
   resultUrl: string;
   resultName: string;
-  /** На сколько секунд результат сдвинут относительно оригинала (начало обрезки). */
+  /** Seconds the result is shifted relative to the original (trim start). */
   offset: number;
-  /** Частота кадров результата — для покадрового шага. */
+  /** Frame rate of the result, used for frame stepping. */
   fps: number;
 }
 
 type Mode = 'split' | 'toggle' | 'side';
 
-/** Сообщения храним ключом словаря, чтобы они переводились при смене языка. */
+/** Messages are stored as dictionary keys so they follow language switches. */
 type Message = { key: Key; params?: Record<string, string>; text?: string };
 
 type Prepared =
@@ -29,7 +29,7 @@ type Prepared =
 
 interface Props {
   item: CompareItem;
-  /** false, пока идёт конвертация, — для превью нужен свободный движок ffmpeg. */
+  /** False while the converter queue runs — proxies need the ffmpeg engine. */
   engineFree: boolean;
   onClose: () => void;
 }
@@ -37,14 +37,14 @@ interface Props {
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 32;
 
-/** Полноэкранное сравнение «до/после»: шторка, переключение, рядом; зум; покадровое видео. */
+/** Full-screen before/after comparison: slider, toggle, side by side; zoom; frame-by-frame video. */
 export function CompareViewer({ item, engineFree, onClose }: Props) {
   useLang();
   const [prepared, setPrepared] = useState<Prepared>({ status: 'preparing', message: { key: 'cmp.preparing' } });
   const [mode, setMode] = useState<Mode>('split');
   const [split, setSplit] = useState(50);
   const [showAfter, setShowAfter] = useState(true);
-  const [zoom, setZoom] = useState<number | null>(null); // null — «вписать»
+  const [zoom, setZoom] = useState<number | null>(null); // null = fit
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const [dims, setDims] = useState<{ before?: string; after?: string }>({});
@@ -55,7 +55,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
   const beforeVideo = useRef<HTMLVideoElement>(null);
   const afterVideo = useRef<HTMLVideoElement>(null);
 
-  // --- Готовим источники для показа (через ffmpeg, если браузер не умеет показывать формат).
+  // --- Prepare displayable sources (proxy through ffmpeg when the browser can't show a format).
   useEffect(() => {
     let alive = true;
     const created: string[] = [];
@@ -67,7 +67,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
       const check = isVideo ? canPlayVideo : canShowImage;
       const [beforeOk, afterOk] = await Promise.all([
         check(originalUrl),
-        // GIF из видео не синхронизировать покадрово как <img>, поэтому он всегда идёт через превью.
+        // A GIF made from a video can't be frame-synced as <img>, so it always goes through a proxy.
         isVideo && item.result.type === 'image/gif' ? Promise.resolve(false) : check(item.resultUrl),
       ]);
       if ((!beforeOk || !afterOk) && !engineFreeAtOpen) {
@@ -97,12 +97,12 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
 
     return () => {
       alive = false;
-      // С задержкой — чтобы медиа-элементы сначала отпустили ссылки.
+      // Delay so media elements release the URLs first.
       setTimeout(() => created.forEach((u) => URL.revokeObjectURL(u)), 0);
     };
   }, [item, engineFreeAtOpen]);
 
-  // --- Размер области просмотра.
+  // --- Viewport size.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -148,7 +148,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     setPan({ x: 0, y: 0 });
   };
 
-  // --- Указатель: перетаскивание — сдвиг, ручка — шторка, колесо — зум.
+  // --- Pointer: pan with drag, divider with its handle, zoom with wheel.
   const drag = useRef<{ kind: 'pan' | 'split'; x: number; y: number; px: number; py: number } | null>(null);
 
   const paneOrigin = (clientX: number) => {
@@ -162,7 +162,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     zoomAt(scale * Math.exp(-e.deltaY * 0.0015), e.clientX - left, e.clientY - top);
   };
 
-  // Активные касания для зума двумя пальцами.
+  // Active touch points for pinch-zoom.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; scale: number } | null>(null);
 
@@ -207,7 +207,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     drag.current = null;
   };
 
-  // Колесо зумирует, а не прокручивает страницу.
+  // Block page scroll while the wheel zooms.
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -216,7 +216,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     return () => el.removeEventListener('wheel', stop);
   }, [prepared.status]);
 
-  // --- Синхронизация видео.
+  // --- Video sync.
   const video = useVideoSync(item, beforeVideo, afterVideo, prepared.status === 'ready');
 
   const flip = useCallback(() => {
@@ -224,7 +224,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     setShowAfter((v) => !v);
   }, []);
 
-  // --- Клавиатура.
+  // --- Keyboard.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'SELECT') return;
@@ -234,7 +234,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
           break;
         case 's':
         case 'S':
-        // «ы» — та же клавиша S в русской раскладке.
+        // 'ы' is the S key on a Russian keyboard layout.
         case 'ы':
         case 'Ы':
           flip();
@@ -283,7 +283,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     const style = transformFor() ?? { visibility: 'hidden' as const };
     const report = (w: number, h: number) => {
       setDims((d) => ({ ...d, [which]: `${w}×${h}` }));
-      // Холст задаёт оригинал; результат растягивается поверх, чтобы пиксели совпали.
+      // The original defines the canvas; the result is stretched over it to line up pixels.
       if (which === 'before') setBox({ w, h });
     };
     if (item.kind === 'video') {
@@ -437,12 +437,12 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
   );
 }
 
-/** Текст сообщения на текущем языке (с подробностями ошибки, если есть). */
+/** Message text in the current language (with error details, if any). */
 function messageText(m: Message) {
   return m.text ? `${t(m.key, m.params)}: ${m.text}` : t(m.key, m.params);
 }
 
-/** Превращает «[Esc]» в подсказке в изображение клавиши. */
+/** Renders "[Esc]" in a hint as a keyboard key. */
 function withKeys(text: string) {
   return text.split(/\[([^\]]+)\]/).map((part, i) => (i % 2 ? <kbd key={i}>{part}</kbd> : part));
 }
@@ -461,7 +461,7 @@ interface VideoSync {
   onLoaded: () => void;
 }
 
-/** Держит оригинал на шкале времени результата (со сдвигом на начало обрезки). */
+/** Keeps the original video locked to the result's timeline (shifted by the trim offset). */
 function useVideoSync(
   item: CompareItem,
   beforeRef: RefObject<HTMLVideoElement | null>,
@@ -482,7 +482,7 @@ function useVideoSync(
     const wasPlaying = !a.paused;
     a.pause();
     b.pause();
-    // Точно выравниваем: при воспроизведении два элемента немного расходятся.
+    // Re-align exactly: playback drifts slightly between the two elements.
     if (wasPlaying) b.currentTime = a.currentTime + item.offset;
     setPlaying(false);
   }, [beforeRef, afterRef, item.offset]);
@@ -509,7 +509,7 @@ function useVideoSync(
       if (!a) return;
       const total = Math.max(1, Math.floor((a.duration || 0) * fps));
       const frame = Math.min(total - 1, Math.max(0, Math.floor(timeRef.current * fps + 1e-3) + frames));
-      // Середина кадра: на границе браузер может показать предыдущий кадр.
+      // Mid-frame time avoids landing on a boundary where browsers may show the previous frame.
       seek((frame + 0.5) / fps);
     },
     [afterRef, fps, seek],
@@ -541,7 +541,7 @@ function useVideoSync(
     const b = beforeRef.current;
     if (!a || !b || !a.duration || !b.duration) return;
     setDuration(a.duration);
-    // Показываем первый кадр обоих, выровненный.
+    // Show the first frame of both, aligned.
     seek(0.5 / fps);
   }, [afterRef, beforeRef, fps, seek]);
 

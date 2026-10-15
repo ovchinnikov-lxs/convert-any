@@ -1,115 +1,110 @@
 # Convert Any
 
-**Русский** · [English](README.en.md)
+An image, video and document converter that runs **entirely in the browser**.
+Nothing is uploaded: all processing is done by [ffmpeg.wasm](https://ffmpegwasm.netlify.app/)
+and JavaScript libraries right on the user's device. The site can be installed as an app
+and used offline.
 
-Конвертер изображений, видео и документов, который работает **полностью в браузере**.
-Файлы никуда не загружаются: всю обработку выполняют [ffmpeg.wasm](https://ffmpegwasm.netlify.app/)
-и JavaScript-библиотеки прямо на устройстве пользователя. Сайт можно установить как приложение
-и пользоваться им без интернета.
+Site: https://convert-any-one.vercel.app
 
-Сайт: https://convert-any-one.vercel.app
+## Features
 
-## Возможности
-
-### Изображения
+### Images
 - PNG, JPG, WebP, GIF, BMP, TIFF, ICO.
-- Качество, WebP без потерь, изменение размера (проценты / вписать в рамку / точный размер).
-- Удаление метаданных (EXIF, GPS). Анимированный GIF → анимированный WebP.
-- Форматы, которые не читает ffmpeg (например, HEIC/AVIF в Safari), декодируются средствами браузера.
+- Quality, lossless WebP, resizing (percent / fit into a box / exact size).
+- Metadata removal (EXIF, GPS). Animated GIF → animated WebP.
+- Formats ffmpeg can't read (e.g. HEIC/AVIF in Safari) are decoded by the browser.
 
-### Видео
-- MP4 (H.264), WebM (VP8), MOV, MKV, AVI, GIF и извлечение звука (MP3, M4A, OGG, WAV).
-- Сжатие «по качеству» или «до размера файла», разрешение, FPS, обрезка по времени, удаление звука.
-- **Умное сжатие:** показывает кодек, разрешение и битрейт исходника; битрейт видео и звука не
-  поднимается выше исходного (файл не «раздувается»); предупреждает, если исходник уже сильно сжат.
-- Многопоточный ffmpeg (≈2× быстрее), если браузер поддерживает изоляцию страницы.
+### Video
+- MP4 (H.264), WebM (VP8), MOV, MKV, AVI, GIF and audio extraction (MP3, M4A, OGG, WAV).
+- “By quality” or “target file size” compression, resolution, FPS, trimming, audio removal.
+- **Smart compression:** shows the source codec, resolution and bitrate; never raises video or
+  audio bitrate above the source (files don't get inflated); warns when the source is already
+  heavily compressed.
+- Multi-threaded ffmpeg (≈2× faster) when the browser supports cross-origin isolation.
 
-### Документы
-- DOCX / Markdown / HTML / TXT / таблицы / картинки → **PDF** с настоящим текстом и кириллицей.
-- PDF → PNG / JPG (по страницам, несколько — в ZIP), TXT, Markdown.
-- PDF → PDF: выбор страниц, поворот, сжатие без потерь или растеризацией в JPEG.
-- Объединение нескольких файлов в один PDF.
+### Documents
+- DOCX / Markdown / HTML / TXT / spreadsheets / images → **PDF** with real, selectable text.
+- PDF → PNG / JPG (per page, several — in a ZIP), TXT, Markdown.
+- PDF → PDF: page selection, rotation, lossless or rasterizing (JPEG) compression.
+- Merging several files into one PDF.
 - DOCX → Markdown / HTML / TXT; Markdown / HTML / TXT → DOCX.
-- XLSX / XLS / ODS / CSV / JSON — между собой (CSV с выбором разделителя и BOM для Excel).
+- XLSX / XLS / ODS / CSV / JSON — to each other (CSV with delimiter choice and BOM for Excel).
 
-### Общее
-- **Сравнение «до/после»** для изображений и видео: шторка, быстрое переключение, «рядом»;
-  зум до пикселей; покадровый просмотр видео.
-- **Офлайн-режим (PWA):** после кнопки «Скачать для офлайна» всё работает без сети.
-- **Интерфейс на русском и английском**: язык определяется по браузеру, его можно переключить
-  вручную (RU / EN), выбор запоминается.
+### General
+- **Before/after comparison** for images and video: slider, quick toggle, side by side;
+  pixel-level zoom; frame-by-frame video.
+- **Offline mode (PWA):** after “Download for offline” everything works without a network.
+- **English and Russian UI**: detected from the browser language, switchable (RU / EN),
+  the choice is remembered.
 
-## Как это устроено
+## How it works
 
 ```
 src/
-  App.tsx                — интерфейс: вкладки, очередь файлов, настройки
-  categories/            — разделы конвертера (описание форматов и настроек)
-    types.ts             — общие типы: Category, FormatDef, FieldDef…
-    image.ts, video.ts   — разделы на ffmpeg (собирают аргументы ffmpeg)
-    document.ts          — раздел документов (свой JS-конвертер)
-  components/            — зона загрузки, панель настроек, сравнение, офлайн-статус
+  App.tsx                — UI: tabs, file queue, settings
+  categories/            — converter sections (formats and settings)
+    types.ts             — shared types: Category, FormatDef, FieldDef…
+    image.ts, video.ts   — ffmpeg-based sections (build ffmpeg arguments)
+    document.ts          — documents section (own JS converter)
+  components/            — drop zone, settings panel, comparison, offline status
   lib/
-    ffmpeg.ts            — загрузка ffmpeg.wasm, очередь задач, анализ медиафайлов
-    preview.ts           — превью для сравнения (форматы, которые браузер не показывает)
+    ffmpeg.ts            — ffmpeg.wasm loading, task queue, media probing
+    preview.ts           — previews for formats the browser can't display
     docs/                — pdf.js, pdf-lib, pdfmake, mammoth, SheetJS
-  i18n/                  — локализация: ru.ts (основной словарь), en.ts
-scripts/copy-ffmpeg.mjs  — копирует ядра ffmpeg.wasm в public/ при сборке
-vercel.json              — заголовки COOP/COEP (многопоточность) и кэширование
+  i18n/                  — localization: ru.ts (main dictionary), en.ts
+scripts/copy-ffmpeg.mjs  — copies ffmpeg.wasm cores into public/ at build time
+vercel.json              — COOP/COEP headers (multi-threading) and caching
 ```
 
-- **ffmpeg.wasm** загружается лениво при первой конвертации фото или видео (≈31 МБ, один раз).
-  Ядро отдаётся с нашего домена, а не со стороннего CDN. Если страница изолирована
-  (заголовки `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`), используется
-  многопоточное ядро, иначе — однопоточное. При сбое многопоточного ядра происходит
-  автоматический откат.
-- **Библиотеки документов** (pdf.js, pdfmake, SheetJS и др.) тоже грузятся только при
-  необходимости, поэтому сама страница лёгкая.
-- **Service worker** (vite-plugin-pwa) кэширует приложение для офлайна; ядро ffmpeg кэшируется
-  при первом использовании.
+- **ffmpeg.wasm** is loaded lazily on the first photo/video conversion (≈31 MB, once), served
+  from our own origin. With cross-origin isolation (`Cross-Origin-Opener-Policy` /
+  `Cross-Origin-Embedder-Policy` headers) the multi-threaded core is used, otherwise the
+  single-threaded one; if the multi-threaded core fails, it falls back automatically.
+- **Document libraries** (pdf.js, pdfmake, SheetJS, …) are loaded on demand too, so the page
+  itself stays light.
+- A **service worker** (vite-plugin-pwa) caches the app for offline use; the ffmpeg core is
+  cached on first use.
 
-Комментарии в коде — на русском.
-
-## Разработка
+## Development
 
 ```bash
 npm install
-npm run dev       # копирует ядра ffmpeg в public/ffmpeg и запускает Vite
-npm run build     # проверка типов и сборка в dist/
-npm run preview   # локальный просмотр сборки (с заголовками изоляции)
+npm run dev       # copies ffmpeg cores into public/ffmpeg and starts Vite
+npm run build     # type check and build into dist/
+npm run preview   # serve the build locally (with isolation headers)
 ```
 
-Нужен Node.js 22+.
+Requires Node.js 22+.
 
-### Как добавить раздел или формат
+### Adding a section or a format
 
-1. Опишите объект `Category` (см. `src/categories/image.ts` и `document.ts`):
-   - `formats` — форматы; `from` — из каких расширений можно получить формат;
-   - `fields` — настройки (слайдеры, списки, чекбоксы, поля ввода рисуются автоматически);
-   - `buildArgs` (аргументы ffmpeg) **или** `convert` (собственный JS-конвертер).
-2. Добавьте раздел в `src/categories/index.ts`.
-3. Все подписи — это ключи словаря: добавьте их в `src/i18n/ru.ts` и `src/i18n/en.ts`.
+1. Describe a `Category` object (see `src/categories/image.ts` and `document.ts`):
+   - `formats` — output formats; `from` — which input extensions can produce a format;
+   - `fields` — settings (sliders, selects, checkboxes, inputs are rendered automatically);
+   - `buildArgs` (ffmpeg arguments) **or** `convert` (own JS converter).
+2. Add it to `src/categories/index.ts`.
+3. All labels are dictionary keys: add them to `src/i18n/ru.ts` and `src/i18n/en.ts`.
 
-### Локализация
+### Localization
 
-- `src/i18n/ru.ts` — основной словарь. `en.ts` типизирован по нему, поэтому сборка не пройдёт,
-  если в английском не хватает ключа.
-- В компонентах: `t('ключ', { параметр })` и `useLang()` для перерисовки при смене языка.
-- Ошибки конвертеров: `throw new LocalizedError('err.ключ', { … })`.
-- Язык определяется по `navigator.languages` (русский для ru, uk, be, kk и др.), ручной выбор
-  хранится в `localStorage`.
+- `src/i18n/ru.ts` is the main dictionary; `en.ts` is typed against it, so the build fails if
+  an English key is missing.
+- In components: `t('key', { param })` and `useLang()` to re-render on language change.
+- Converter errors: `throw new LocalizedError('err.key', { … })`.
+- The language is detected from `navigator.languages` (Russian for ru, uk, be, kk, …); a manual
+  choice is stored in `localStorage`.
 
-## Деплой
+## Deployment
 
-Проект разворачивается на Vercel как статический сайт (`vercel.json`). Важно сохранить
-заголовки COOP/COEP: без них не будет многопоточного ffmpeg (сайт при этом продолжит
-работать на однопоточном).
+Deployed to Vercel as a static site (`vercel.json`). Keep the COOP/COEP headers: without them
+there is no multi-threaded ffmpeg (the site still works on the single-threaded core).
 
-## Ограничения
+## Limitations
 
-- ffmpeg.wasm медленнее нативного ffmpeg, даже в многопоточном режиме.
-- Память WebAssembly ограничена (~2 ГБ): очень большие видео могут не обработаться.
-- WebM кодируется в VP8 — VP9 в текущей сборке ffmpeg.wasm падает.
-- PDF → DOCX не поддерживается (качественно это делают только серверные инструменты).
-  Сложная вёрстка DOCX (колонтитулы, колонки, обтекание) при переводе в PDF упрощается.
-- Сканы без текстового слоя дают пустой текст (распознавания текста пока нет).
+- ffmpeg.wasm is slower than native ffmpeg, even multi-threaded.
+- WebAssembly memory is limited (~2 GB): very large videos may fail.
+- WebM is encoded as VP8 — VP9 crashes in the current ffmpeg.wasm build.
+- PDF → DOCX is not supported (only server-side tools do it well). Complex DOCX layout
+  (headers/footers, columns, text wrapping) is simplified when converting to PDF.
+- Scans without a text layer yield empty text (no OCR yet).

@@ -13,7 +13,7 @@ import { baseName, browserDecodeToPng, downloadBlob, formatBytes } from './lib/u
 
 type JobStatus = 'queued' | 'running' | 'done' | 'error';
 
-/** Один файл в очереди и его результат. */
+/** One file in the queue and its result. */
 interface Job {
   id: number;
   categoryId: string;
@@ -26,16 +26,16 @@ interface Job {
     url: string;
     name: string;
     format: string;
-    /** Для сравнения «до/после»: начало обрезки и частота кадров результата. */
+    /** For before/after: trim start of the result and its frame rate. */
     offset: number;
     fps: number;
   };
   previewUrl?: string;
-  /** Объединённый результат (например, склеенный PDF), а не исходный файл. */
+  /** A combined output (e.g. merged PDF), not a source file. */
   merged?: boolean;
-  /** Сведения об исходнике (видео). */
+  /** Probed source info (video). */
   media?: MediaInfo;
-  /** Замечание к результату (например, файл почти не уменьшился). */
+  /** Non-fatal note about the result (e.g. it didn't get smaller). */
   warning?: Key;
 }
 
@@ -43,7 +43,7 @@ type EngineState = { state: 'idle' | 'loading' | 'ready' | 'error'; progress: nu
 
 let nextId = 1;
 
-/** Настройки по умолчанию для каждой категории. */
+/** Default settings for every category. */
 function initialSettings() {
   return Object.fromEntries(
     categories.map((c) => [c.id, { format: c.defaultFormat, options: { ...c.defaultOptions } }]),
@@ -66,7 +66,7 @@ export default function App() {
   const sourceJobs = useMemo(() => categoryJobs.filter((j) => !j.merged), [categoryJobs]);
   const inputs = useMemo(() => new Set(sourceJobs.map((j) => extOf(j.file.name))), [sourceJobs]);
   const usesFFmpeg = Boolean(category.buildArgs && !category.convert);
-  /** Можно ли получить формат из файла с таким расширением. */
+  /** Whether the format can be produced from a file with this extension. */
   const compatible = (fmtId: string, ext: string) => {
     const from = category.formats.find((f) => f.id === fmtId)?.from;
     return !from || from.includes(ext);
@@ -77,7 +77,7 @@ export default function App() {
     setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
 
-  /** Загружает движок ffmpeg (один раз), показывая прогресс. */
+  /** Loads the ffmpeg engine (once), reporting progress. */
   const ensureEngine = useCallback(async () => {
     if (isFFmpegLoaded()) return;
     setEngine({ state: 'loading', progress: 0 });
@@ -100,11 +100,11 @@ export default function App() {
       previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
     }));
     setJobs((js) => [...js, ...added]);
-    // Начинаем грузить движок в фоне, пока пользователь выбирает настройки.
+    // Start fetching the engine in the background while the user picks settings.
     if (usesFFmpeg) {
       const engineReady = ensureEngine();
       if (category.needsDuration) {
-        // Сразу показываем кодек, разрешение и битрейт — видно, насколько файл можно сжать.
+        // Show codec / resolution / bitrate right away, so it's clear how compressible a file is.
         for (const job of added)
           engineReady
             .then(() => probeMedia(job.file))
@@ -114,7 +114,7 @@ export default function App() {
     }
   };
 
-  // Если выбранный формат нельзя получить ни из одного файла — переключаемся на подходящий.
+  // When the chosen format can't be made from any of the added files, switch to one that can.
   useEffect(() => {
     if (!inputs.size || formatAvailable(format)) return;
     const next = category.formats.find((f) => formatAvailable(f.id));
@@ -182,7 +182,7 @@ export default function App() {
     try {
       ({ data, info } = await run(job.file));
     } catch (err) {
-      // Некоторые форматы (AVIF, HEIC…) ffmpeg.wasm не читает — пусть их декодирует браузер.
+      // ffmpeg.wasm can't decode some image formats (AVIF, HEIC…) — let the browser decode them.
       if (cat.id !== 'image' || cancelled.current) throw err;
       const decoded = await browserDecodeToPng(job.file).catch(() => null);
       if (!decoded) throw err;
@@ -242,7 +242,7 @@ export default function App() {
         await addMerged(cat, await cat.merge(outputs, opts));
       }
     } catch {
-      // движок не загрузился — это уже показано в интерфейсе
+      // engine failed to load; the UI already shows it
     } finally {
       setBusy(false);
     }
@@ -252,7 +252,7 @@ export default function App() {
     const file = new File([out.blob], out.name, { type: out.blob.type });
     const label = cat.formats.find((f) => f.ext === extOf(out.name))?.label ?? '';
     setJobs((js) => [
-      // Заменяем прежний объединённый результат этой категории.
+      // Replace a previous merged result of this category.
       ...js.filter((j) => !(j.merged && j.categoryId === cat.id)),
       {
         id: nextId++,
@@ -557,7 +557,7 @@ function MediaLine({ media: m }: { media: MediaInfo }) {
         : `${m.vbitrate} ${t('unit.kbps')}`
       : '',
   ].filter(Boolean);
-  // Бит на пиксель кадра: телефоны пишут ~0,15–0,3; ниже ~0,07 видео уже сильно сжато.
+  // Bits per pixel per frame: phones record ~0.15–0.3; below ~0.07 the video is already heavily compressed.
   const bpp = m.vbitrate && m.width && m.height ? (m.vbitrate * 1000) / (m.width * m.height * (m.fps || 30)) : 0;
   const tight = bpp > 0 && bpp < 0.07;
   return (
@@ -575,7 +575,7 @@ function MediaLine({ media: m }: { media: MediaInfo }) {
   );
 }
 
-/** Переключатель языка интерфейса RU / EN. */
+/** RU / EN interface language switch. */
 function LangSwitch() {
   const lang = useLang();
   return (

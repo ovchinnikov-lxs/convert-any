@@ -4,8 +4,8 @@ import { imageCategory } from './image';
 import { videoCategory } from './video';
 
 /**
- * Разделы конвертера (вкладки). Чтобы добавить новый, опишите его как `imageCategory`
- * (форматы + поля настроек + buildArgs или convert) и добавьте в этот список.
+ * Converter categories (tabs). To add one, describe it like `imageCategory`
+ * (formats + option fields + buildArgs or convert) and put it in this list.
  */
 export const categories: Category[] = [
   imageCategory,

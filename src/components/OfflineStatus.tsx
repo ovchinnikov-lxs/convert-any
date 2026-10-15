@@ -3,7 +3,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { t, useLang } from '../i18n';
 import { engineThreads } from '../lib/ffmpeg';
 
-/** Лежит ли ядро ffmpeg для этого браузера в кэше service worker. */
+/** True when the ffmpeg core for this browser is already in the service-worker cache. */
 async function engineCached(): Promise<boolean> {
   if (!('caches' in window)) return false;
   try {
@@ -30,14 +30,14 @@ function useOnline() {
 }
 
 interface Props {
-  /** Скачивает движок ffmpeg (и тем самым кладёт его в кэш). */
+  /** Downloads (and thereby caches) the ffmpeg engine. */
   onDownloadEngine: () => Promise<void>;
-  /** Меняется, когда движок загрузился, — повод перепроверить кэш. */
+  /** Changes whenever the engine finishes loading, to re-check the cache. */
   engineState: string;
   busy: boolean;
 }
 
-/** Плашка офлайн-режима в шапке и уведомление о новой версии сайта. */
+/** Offline-mode pill in the header and the "new version available" toast. */
 export function OfflineStatus({ onDownloadEngine, engineState, busy }: Props) {
   useLang();
   const {

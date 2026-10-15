@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Изоляция страницы (COOP/COEP) включает SharedArrayBuffer → многопоточный ffmpeg.
+// Cross-origin isolation (COOP/COEP) enables SharedArrayBuffer → multi-threaded ffmpeg.
 const isolation = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -14,14 +14,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // Страница спрашивает перед переходом на новую версию — чтобы не прервать конвертацию.
+      // The page asks before switching to a new version, so a running conversion isn't interrupted.
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Convert Any — конвертер файлов',
+        name: 'Convert Any — file converter',
         short_name: 'Convert Any',
-        description: 'Конвертация изображений, видео и документов прямо на устройстве, без загрузки на сервер.',
-        lang: 'ru',
+        description: 'Convert images, video and documents right on your device — nothing is uploaded.',
+        lang: 'en',
         start_url: '/',
         display: 'standalone',
         background_color: '#0f1117',
@@ -33,9 +33,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Всё приложение (включая лениво загружаемые библиотеки документов) кэшируется для офлайна…
+        // The whole app (incl. lazily loaded document libraries) is precached for offline use…
         globPatterns: ['**/*.{js,mjs,css,html,svg,png,ico,webmanifest}'],
-        // …кроме ядер ffmpeg (~31 МБ): они кэшируются при первом использовании или по кнопке «Скачать для офлайна».
+        // …except the ~31 MB ffmpeg cores: those are cached on first use (or via "Download for offline").
         globIgnores: ['ffmpeg/**'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
@@ -58,7 +58,7 @@ export default defineConfig({
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
   },
   build: {
-    // pdf.js, pdfmake и SheetJS большие, но грузятся лениво — только для документов.
+    // pdf.js, pdfmake and SheetJS are big but loaded lazily, only for documents.
     chunkSizeWarningLimit: 1500,
   },
   worker: {

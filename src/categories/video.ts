@@ -1,9 +1,9 @@
 import type { BuildContext, Category, Options } from './types';
 
-/** Форматы «только звук» — для них видео-настройки скрыты. */
+/** Audio-only formats — video settings are hidden for them. */
 const AUDIO_ONLY = ['mp3', 'm4a', 'ogg', 'wav'];
 
-/** Разбирает время «90», «1:30», «1:02:03» или «12,5» в секунды. */
+/** Parses "90", "1:30", "1:02:03" or "12,5" into seconds. */
 export function parseTime(v: unknown): number | null {
   const s = String(v ?? '').trim().replace(',', '.');
   if (!s) return null;
@@ -12,7 +12,7 @@ export function parseTime(v: unknown): number | null {
   return parts.reduce((acc, n) => acc * 60 + n, 0);
 }
 
-/** Фильтры кадра: частота кадров и размер. */
+/** Frame filters: frame rate and size. */
 function videoFilters(format: string, o: Options): string[] {
   const filters: string[] = [];
   const fps = Number(o.fps) || 0;
@@ -22,7 +22,7 @@ function videoFilters(format: string, o: Options): string[] {
     const w = Number(o.gifWidth) || 480;
     filters.push(`scale='min(iw,${w})':-2:flags=lanczos`);
   } else if (height) {
-    // Только уменьшение; стороны чётные — этого требует yuv420p.
+    // Only downscale; keep dimensions even for yuv420p.
     filters.push(`scale=-2:'min(ih,${height})':flags=bicubic`);
   } else {
     filters.push('scale=trunc(iw/2)*2:trunc(ih/2)*2');
@@ -30,12 +30,12 @@ function videoFilters(format: string, o: Options): string[] {
   return filters;
 }
 
-/** Переводит качество 1..100 в диапазон CRF кодека (выше качество → меньше CRF). */
+/** Maps 1..100 quality to an encoder CRF range (higher quality → lower CRF). */
 function crf(quality: number, best: number, worst: number) {
   return String(Math.round(worst - ((quality - 1) / 99) * (worst - best)));
 }
 
-/** Битрейт видео для режима «до размера файла», кбит/с. */
+/** Video bitrate for the target-size mode, kbit/s. */
 function targetBitrate(ctx: BuildContext): number | null {
   const { options, duration } = ctx;
   if (options.mode !== 'size' || !duration) return null;
@@ -43,14 +43,14 @@ function targetBitrate(ctx: BuildContext): number | null {
   const totalKbits = (Number(options.targetMB) || 10) * 8 * 1024 * 0.93;
   const audioKbps = options.removeAudio ? 0 : audioKbit(ctx);
   const kbps = Math.max(50, Math.floor(totalKbits / effective - audioKbps));
-  // Цель больше исходника только раздула бы файл.
+  // A target above the source's size would only inflate the file.
   const cap = videoCap(ctx);
   return cap ? Math.min(kbps, cap) : kbps;
 }
 
 /**
- * Битрейт звука: выбранный, но не выше исходного — перекодировать звук
- * 64 кбит/с в 128 значит просто увеличить файл.
+ * Audio bitrate: the chosen one, but never above the source's — re-encoding
+ * 64 kbit/s audio at 128 only makes the file bigger.
  */
 function audioKbit(ctx: BuildContext): number {
   const chosen = Number(ctx.options.audioBitrate) || 128;
@@ -59,22 +59,22 @@ function audioKbit(ctx: BuildContext): number {
 }
 
 /**
- * Потолок битрейта видео в режиме «по качеству»: чуть ниже исходного,
- * чтобы перекодирование никогда не увеличивало файл.
+ * Upper bound for video bitrate in quality mode: a bit below the source's own,
+ * so re-encoding never makes a file bigger.
  */
 function videoCap(ctx: BuildContext): number | null {
   const v = ctx.media?.vbitrate;
   return v && v > 50 ? Math.round(v * 0.9) : null;
 }
 
-/** Длительность фрагмента с учётом обрезки. */
+/** Clip duration after trimming. */
 function clipDuration(o: Options, duration: number) {
   const start = parseTime(o.start) ?? 0;
   const end = parseTime(o.end) ?? duration;
   return Math.max(0.1, Math.min(end, duration) - start);
 }
 
-/** Пресеты скорости кодирования для x264 и libvpx. */
+/** Encoding speed presets for x264 and libvpx. */
 const speedPresets: Record<string, { x264: string; vpx: string }> = {
   fast: { x264: 'ultrafast', vpx: '8' },
   balanced: { x264: 'veryfast', vpx: '5' },
@@ -266,10 +266,10 @@ export const videoCategory: Category = {
 
     switch (format.id) {
       case 'webm':
-        // VP8: libvpx-vp9 в текущей сборке ffmpeg.wasm падает.
+        // VP8: libvpx-vp9 crashes in the current ffmpeg.wasm build.
         args.push('-c:v', 'libvpx', '-deadline', 'good', '-cpu-used', speed.vpx, '-auto-alt-ref', '0');
         if (kbps) args.push('-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`);
-        // В libvpx CRF работает только вместе с потолком битрейта.
+        // In libvpx, CRF only works together with a bitrate cap.
         else args.push('-crf', crf(q, 6, 60), '-b:v', `${Math.min(20000, videoCap(ctx) ?? 20000)}k`);
         args.push('-pix_fmt', 'yuv420p');
         if (!o.removeAudio) args.push('-c:a', 'libopus', '-b:a', ab);
@@ -285,7 +285,7 @@ export const videoCategory: Category = {
         if (kbps) args.push('-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`);
         else {
           args.push('-crf', crf(q, 18, 38));
-          // CRF с потолком: результату не нужно больше бит, чем было у исходника.
+          // Capped CRF: the result never needs more bits than the source had.
           const cap = videoCap(ctx);
           if (cap) args.push('-maxrate', `${cap}k`, '-bufsize', `${cap}k`);
         }

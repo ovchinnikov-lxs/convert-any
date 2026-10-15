@@ -2,22 +2,22 @@ import { LocalizedError, t as tr } from '../i18n';
 import { baseName } from '../lib/utils';
 import type { Category, ConvertContext, ConvertOutput, Options } from './types';
 
-// Группы входных расширений.
+// Input extension groups.
 const TEXT = ['md', 'markdown', 'txt', 'html', 'htm'];
 const SHEETS = ['xlsx', 'xls', 'ods', 'csv', 'json'];
 const IMAGES = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 const HTML_SOURCES = ['docx', ...TEXT, 'xlsx', 'xls', 'ods', 'csv'];
 
-/** Есть ли среди добавленных файлов хоть один из перечисленных типов. */
+/** Whether any of the added files has one of the listed types. */
 const has = (inputs: Set<string>, list: string[]) => list.some((e) => inputs.has(e));
 
-/** Расширение файла строчными буквами, без точки. */
+/** File extension, lowercase, without the dot. */
 export function extOf(name: string) {
   const i = name.lastIndexOf('.');
   return i > 0 ? name.slice(i + 1).toLowerCase() : '';
 }
 
-/** Упаковывает несколько результатов в один ZIP. */
+/** Packs several outputs into one ZIP. */
 async function zip(files: { name: string; data: Blob | string }[], name: string): Promise<ConvertOutput> {
   const { zipSync, strToU8 } = await import('fflate');
   const entries: Record<string, Uint8Array> = {};
@@ -30,7 +30,7 @@ async function zip(files: { name: string; data: Blob | string }[], name: string)
 const pdfBlob = (bytes: Uint8Array) => new Blob([bytes as BlobPart], { type: 'application/pdf' });
 const textBlob = (text: string, mime: string) => new Blob([text], { type: `${mime};charset=utf-8` });
 
-/** Читает любой текстовый или офисный файл как HTML — общий промежуточный формат. */
+/** Loads any text-like / office input as HTML, the common intermediate format. */
 async function toHtml(file: File, ext: string, o: Options): Promise<string> {
   const t = await import('../lib/docs/text');
   if (ext === 'docx') return t.docxToHtml(file);
@@ -44,7 +44,7 @@ async function toHtml(file: File, ext: string, o: Options): Promise<string> {
   throw new LocalizedError('err.unsupported', { ext });
 }
 
-/** Конвертация документа: выбирает нужную цепочку по входному расширению и целевому формату. */
+/** Document conversion: picks the pipeline by input extension and target format. */
 async function convert({ file, format, options: o, onProgress }: ConvertContext): Promise<ConvertOutput> {
   const ext = extOf(file.name);
   const base = baseName(file.name);
@@ -105,7 +105,7 @@ async function convert({ file, format, options: o, onProgress }: ConvertContext)
     case 'md': {
       const t = await import('../lib/docs/text');
       if (ext === 'pdf') {
-        // В тексте PDF нет структуры — абзацы остаются абзацами Markdown.
+        // No structure in PDF text; keep paragraphs as Markdown paragraphs.
         const text = await (await import('../lib/docs/pdf')).pdfToText(file, pages, onProgress);
         return out(textBlob(text.replace(/\f/g, '---'), 'text/markdown'));
       }
@@ -147,7 +147,7 @@ async function convert({ file, format, options: o, onProgress }: ConvertContext)
   throw new LocalizedError('err.noConverter', { ext, format: format.label });
 }
 
-// Условия видимости настроек.
+// Option visibility conditions.
 const isPdfOp = (f: string, i: Set<string>) => f === 'pdf' && i.has('pdf');
 const makesPdfFromOther = (f: string, i: Set<string>) => f === 'pdf' && [...i].some((e) => e !== 'pdf');
 const fromPdfPages = (f: string, i: Set<string>) => i.has('pdf') && ['pdf', 'png', 'jpg', 'txt', 'md'].includes(f);

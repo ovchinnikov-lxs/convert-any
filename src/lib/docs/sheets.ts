@@ -18,7 +18,7 @@ export async function readWorkbook(file: File, ext: string): Promise<WorkBook> {
     return wb;
   }
   if (ext === 'csv') {
-    // Декодируем сами, чтобы CSV из Excel в Windows-1251 не потеряли кириллицу.
+    // Decode ourselves so Windows-1251 CSVs from Excel keep their Cyrillic.
     return X.read(await readText(file), { type: 'string', raw: true });
   }
   return X.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
@@ -38,7 +38,7 @@ export async function workbookToFile(wb: WorkBook, bookType: 'xlsx' | 'ods'): Pr
   return new Blob([data], { type: mime });
 }
 
-/** По одному CSV на лист. BOM в UTF-8 помогает Excel правильно открыть кириллицу. */
+/** One CSV per sheet. A UTF-8 BOM lets Excel open non-Latin text correctly. */
 export async function workbookToCsv(wb: WorkBook, delimiter: string, all: boolean, bom: boolean) {
   const X = await lib();
   return sheetNames(wb, all).map((name) => ({
@@ -54,7 +54,7 @@ export async function workbookToJson(wb: WorkBook, all: boolean): Promise<string
   return JSON.stringify(all && names.length > 1 ? Object.fromEntries(names.map((n, i) => [n, data[i]])) : data[0], null, 2) + '\n';
 }
 
-/** HTML-таблицы (по одной на лист, с названиями листов в заголовках). */
+/** HTML tables (one per sheet, with sheet names as headings). */
 export async function workbookToHtml(wb: WorkBook, all: boolean): Promise<string> {
   const X = await lib();
   const names = sheetNames(wb, all);

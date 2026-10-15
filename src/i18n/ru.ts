@@ -1,9 +1,9 @@
 /**
- * Русский словарь — основной: по его ключам проверяется полнота остальных языков.
- * `{name}` — место для подстановки параметра, `[Esc]` в подсказках рисуется как клавиша.
+ * Russian dictionary — the main one: other languages are checked against its keys.
+ * `{name}` is a parameter placeholder; `[Esc]` in hints is rendered as a key.
  */
 export const ru = {
-  // --- Страница
+  // --- Page
   'meta.title': 'Convert Any — конвертер файлов в браузере',
   'meta.description': 'Конвертер изображений, видео и документов прямо в браузере. Файлы не покидают ваше устройство.',
   'app.subtitle': 'Конвертер файлов прямо в браузере',
@@ -25,7 +25,7 @@ export const ru = {
   'app.footerAnd': 'и',
   'app.footerLocal': 'Вся обработка выполняется локально — без серверов и загрузок.',
 
-  // --- Список файлов
+  // --- File list
   'drop.title': 'Перетащите файлы сюда',
   'drop.or': ' или нажмите, чтобы выбрать',
   'drop.more': 'Добавить ещё файлы',
@@ -44,7 +44,7 @@ export const ru = {
   'job.tight': 'уже сильно сжат',
   'job.tightTitle': 'Битрейт исходника уже низкий. Заметно уменьшить файл можно только снизив разрешение или качество.',
 
-  // --- Единицы
+  // --- Units
   'unit.B': 'Б',
   'unit.KB': 'КБ',
   'unit.MB': 'МБ',
@@ -55,7 +55,7 @@ export const ru = {
   'unit.mm': 'мм',
   'unit.kbpsN': '{n} кбит/с',
 
-  // --- Офлайн
+  // --- Offline
   'offline.noNet': 'Нет сети — работаем офлайн',
   'offline.preparing': 'Офлайн-режим готовится…',
   'offline.ready': '✓ Работает офлайн',
@@ -68,7 +68,7 @@ export const ru = {
   'offline.afterConvert': 'После конвертации',
   'offline.later': 'Позже',
 
-  // --- Сравнение до/после
+  // --- Before / after
   'cmp.dialog': 'Сравнение до и после',
   'cmp.modes': 'Режим сравнения',
   'cmp.split': 'Шторка',
@@ -101,7 +101,7 @@ export const ru = {
   'cmp.frameN': 'кадр {n}/{total}',
   'cmp.speed': 'Скорость',
 
-  // --- Категории
+  // --- Categories
   'cat.image.title': 'Изображения',
   'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO — смена формата, сжатие, изменение размера',
   'cat.video.title': 'Видео',
@@ -109,7 +109,7 @@ export const ru = {
   'cat.docs.title': 'Документы',
   'cat.docs.desc': 'PDF, DOCX, Markdown, HTML, TXT, таблицы XLSX/ODS/CSV — конвертация, сжатие и объединение PDF',
 
-  // --- Подсказки к форматам
+  // --- Format hints
   'hint.webp': 'Лёгкий формат для веба',
   'hint.png': 'Без потерь, с прозрачностью',
   'hint.jpg': 'Фото, без прозрачности',
@@ -133,7 +133,7 @@ export const ru = {
   'hint.dcsv': 'Таблица текстом',
   'hint.djson': 'Строки таблицы как объекты',
 
-  // --- Настройки: общие и изображения
+  // --- Options: common and images
   'opt.quality': 'Качество',
   'opt.quality.hint': 'Меньше — легче файл',
   'opt.lossless': 'Без потерь (lossless)',
@@ -148,7 +148,7 @@ export const ru = {
   'opt.auto': 'авто',
   'opt.strip': 'Удалить метаданные (EXIF, GPS)',
 
-  // --- Настройки: видео
+  // --- Options: video
   'opt.mode': 'Режим сжатия',
   'opt.mode.quality': 'По качеству',
   'opt.mode.size': 'До размера файла',
@@ -171,7 +171,7 @@ export const ru = {
   'opt.mute': 'Убрать звук',
   'opt.abitrate': 'Битрейт звука',
 
-  // --- Настройки: документы
+  // --- Options: documents
   'opt.pdfMode': 'Что сделать с PDF',
   'opt.pdfMode.optimize': 'Пересохранить без потерь',
   'opt.pdfMode.raster': 'Сильно сжать (страницы → JPEG)',
@@ -205,7 +205,7 @@ export const ru = {
   'opt.merge.hint': 'В порядке списка файлов',
   'docs.mergedName': 'объединённый',
 
-  // --- Ошибки
+  // --- Errors
   'err.load': 'Не удалось загрузить {url}: {status}',
   'err.ffmpegCode': 'ffmpeg завершился с кодом {code}',
   'err.empty': 'Пустой результат',

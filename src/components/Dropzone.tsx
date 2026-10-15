@@ -4,11 +4,11 @@ import { t, useLang } from '../i18n';
 interface Props {
   accept: string;
   onFiles: (files: File[]) => void;
-  /** Компактный вид, когда файлы уже добавлены. */
+  /** Compact look once files have been added. */
   compact?: boolean;
 }
 
-/** Зона для перетаскивания файлов; по клику открывает выбор файлов. */
+/** Drop zone for files; opens the file picker on click. */
 export function Dropzone({ accept, onFiles, compact }: Props) {
   useLang();
   const input = useRef<HTMLInputElement>(null);

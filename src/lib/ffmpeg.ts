@@ -1,7 +1,7 @@
 import { FFmpeg, FFFSType } from '@ffmpeg/ffmpeg';
 import { LocalizedError } from '../i18n';
 
-// Многопоточное ядро — если страница изолирована (доступен SharedArrayBuffer).
+// Multi-threaded core when the page is cross-origin isolated (SharedArrayBuffer available).
 let useMT = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
 
 export function engineThreads() {
@@ -31,13 +31,13 @@ async function fetchToBlobURL(url: string, mime: string, onProgress?: LoadProgre
   return URL.createObjectURL(new Blob(chunks as BlobPart[], { type: mime }));
 }
 
-/** Лениво (один раз) загружает ядро ffmpeg.wasm. */
+/** Lazily loads the ffmpeg.wasm core (once). */
 export function loadFFmpeg(onProgress?: LoadProgress): Promise<FFmpeg> {
   if (instance) return Promise.resolve(instance);
   if (loading) return loading;
   loading = (async () => {
-    // Файлы ядра скачиваются один раз и хранятся как blob-ссылки, поэтому
-    // пересоздать экземпляр после сбоя или отмены — дёшево.
+    // Core files are downloaded once and kept as blob URLs, so re-creating
+    // the instance after a crash/cancel is cheap.
     coreURLs ??= (async () => {
       const base = `/ffmpeg/${useMT ? 'mt' : 'st'}`;
       return {
@@ -54,7 +54,7 @@ export function loadFFmpeg(onProgress?: LoadProgress): Promise<FFmpeg> {
       await ff.load(await coreURLs);
     } catch (e) {
       if (!useMT) throw e;
-      // Многопоточное ядро не запустилось — переходим на однопоточное.
+      // Multi-threaded core didn't start — fall back to the single-threaded one.
       ff.terminate();
       switchToSingleThread();
       instance = null;
@@ -76,7 +76,7 @@ export function isFFmpegLoaded() {
 
 let generation = 0;
 
-/** Отменяет текущую задачу. Следующий loadFFmpeg создаст новый экземпляр. */
+/** Cancels the running job. The next call to loadFFmpeg creates a fresh instance. */
 export function cancelFFmpeg() {
   generation++;
   terminateFFmpeg();
@@ -96,12 +96,12 @@ function terminateFFmpeg() {
 export interface MediaInfo {
   duration?: number;
   fps?: number;
-  /** Общий битрейт, кбит/с. */
+  /** Overall bitrate, kbit/s. */
   bitrate?: number;
   vcodec?: string;
   width?: number;
   height?: number;
-  /** Битрейт видеопотока, кбит/с (оценивается по общему, если контейнер его не сообщает). */
+  /** Video stream bitrate, kbit/s (estimated from the total when the container doesn't say). */
   vbitrate?: number;
   acodec?: string;
   abitrate?: number;
@@ -115,9 +115,9 @@ export interface RunResult {
 export interface RunOptions {
   file: File;
   outName: string;
-  /** Сначала проанализировать вход (длительность, битрейты…) и передать в `args`. */
+  /** Probe the input first (duration, bitrates…) and pass it to `args`. */
   probe?: boolean;
-  /** Собирает аргументы по пути, откуда ffmpeg читает вход. */
+  /** Builds the argument list given the path ffmpeg should read the input from. */
   args: (inputPath: string, info: MediaInfo) => string[];
   onProgress?: (ratio: number) => void;
   onLog?: (line: string) => void;
@@ -125,7 +125,7 @@ export interface RunOptions {
 
 let jobCounter = 0;
 
-// Экземпляр ffmpeg умеет делать только одно дело за раз — всё ставим в очередь.
+// One ffmpeg instance can only do one thing at a time; queue everything.
 let queue: Promise<unknown> = Promise.resolve();
 function serial<T>(fn: () => Promise<T>): Promise<T> {
   const run = queue.then(fn, fn);
@@ -134,8 +134,8 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Одна конвертация. ffmpeg.wasm иногда «ломается» после предыдущих запусков,
- * поэтому при ошибке повторяем один раз на свежем экземпляре.
+ * Runs one conversion. ffmpeg.wasm occasionally ends up in a broken state
+ * after earlier runs, so on failure we retry once on a fresh instance.
  */
 export function runFFmpeg(opts: RunOptions): Promise<RunResult> {
   return serial(async () => {
@@ -145,7 +145,7 @@ export function runFFmpeg(opts: RunOptions): Promise<RunResult> {
     } catch (first) {
       if (gen !== generation) throw first;
       terminateFFmpeg();
-      // Сбой на многопоточном ядре — повторяем на однопоточном и остаёмся на нём.
+      // A failure on the multi-threaded core: retry (and stay) on the single-threaded one.
       if (useMT) switchToSingleThread();
       try {
         return await runOnce(opts);
@@ -157,7 +157,7 @@ export function runFFmpeg(opts: RunOptions): Promise<RunResult> {
   });
 }
 
-/** Читает кодек, разрешение и битрейт без конвертации. */
+/** Reads codec / resolution / bitrate info without converting. */
 export function probeMedia(file: File): Promise<MediaInfo> {
   return serial(async () => {
     const ff = await loadFFmpeg();
@@ -180,8 +180,8 @@ async function withInput<T>(ff: FFmpeg, file: File, fn: (inputPath: string) => P
   const mountDir = `/in${job}`;
   let inputPath: string;
   let mounted = false;
-  // WORKERFS читает файл по мере надобности, не копируя его в память wasm, —
-  // для больших видео это критично.
+  // WORKERFS reads the file lazily instead of copying it into wasm memory,
+  // which matters a lot for big videos.
   try {
     await ff.createDir(mountDir);
     await ff.mount(FFFSType.WORKERFS, { files: [file] }, mountDir);
@@ -225,7 +225,7 @@ async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOpt
       let info: MediaInfo = {};
       if (probe) {
         const start = logs.length;
-        // Завершится с ошибкой (нет выходного файла), но напечатает сведения о потоках.
+        // Exits with an error (no output given) but prints the stream info.
         await ff.exec(['-hide_banner', '-i', inputPath]);
         info = parseMediaInfo(logs.slice(start));
       }
@@ -245,9 +245,9 @@ async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOpt
 }
 
 /**
- * Многопоточное ядро падает с многопоточным декодером ffmpeg и с x264 больше
- * чем в 4 потока, но стабильно (и ~в 2,3 раза быстрее) с однопоточным декодером
- * и внутренними потоками x264, ограниченными четырьмя.
+ * The multi-threaded core crashes with ffmpeg's own frame threading in the decoder
+ * and with more than 4 x264 threads, but is stable (and ~2.3× faster) with a
+ * single-threaded decoder and x264's internal threads capped at 4.
  */
 function adaptForThreads(args: string[]): string[] {
   if (!useMT) return args;

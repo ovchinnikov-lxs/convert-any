@@ -1,9 +1,9 @@
 import type { Category, Options } from './types';
 
-/** Форматы со сжатием с потерями — для них есть ползунок качества. */
+/** Lossy formats — they get a quality slider. */
 const lossyFormats = ['webp', 'jpg'];
 
-/** Фильтр ffmpeg для изменения размера по выбранному режиму (null — размер не меняется). */
+/** ffmpeg resize filter for the chosen mode (null = keep size). */
 function scaleFilter(o: Options): string | null {
   const mode = o.resize as string;
   const w = Number(o.width) || 0;
@@ -18,7 +18,7 @@ function scaleFilter(o: Options): string | null {
       if (!w && !h) return null;
       const W = w || 100000;
       const H = h || 100000;
-      // Только уменьшение, пропорции сохраняются.
+      // Shrink only, keep aspect ratio.
       return `scale=w='min(iw,${W})':h='min(ih,${H})':force_original_aspect_ratio=decrease:flags=lanczos`;
     }
     case 'exact': {
@@ -132,7 +132,7 @@ export const imageCategory: Category = {
         else args.push('-quality', String(q), '-compression_level', '4');
         break;
       case 'jpg':
-        // В JPEG нет прозрачности — подкладываем белый фон.
+        // Flatten transparency onto white; JPEG has no alpha.
         filters.push(
           'format=rgba,split[fg][bg];[bg]drawbox=c=white@1:t=fill[w];[w][fg]overlay=format=auto,format=yuvj444p',
         );
@@ -161,7 +161,7 @@ export const imageCategory: Category = {
 
     if (filters.length) args.push('-vf', filters.join(','));
     if (options.stripMetadata) args.push('-map_metadata', '-1');
-    // Форматы без анимации: берём только первый кадр.
+    // Single-frame outputs: take only the first frame for formats without animation.
     if (['jpg', 'png', 'bmp', 'tiff', 'ico'].includes(format.id)) {
       args.push('-frames:v', '1', '-update', '1');
     }

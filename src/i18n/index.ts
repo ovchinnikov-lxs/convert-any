@@ -8,16 +8,16 @@ export type Key = keyof Dict;
 const dicts: Record<Lang, Dict> = { ru, en };
 const STORAGE_KEY = 'lang';
 
-/** Языки, для которых по умолчанию показываем русский интерфейс. */
+/** Languages that get the Russian UI by default. */
 const RUSSIAN_LIKE = ['ru', 'uk', 'be', 'kk', 'ky', 'uz', 'tg', 'hy', 'az', 'ka'];
 
-/** Выбор пользователя, иначе — первый подходящий язык из настроек браузера. */
+/** The user's choice, otherwise the first matching language from the browser settings. */
 function detect(): Lang {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === 'ru' || saved === 'en') return saved;
   } catch {
-    // localStorage может быть недоступен (приватный режим и т.п.)
+    // localStorage may be unavailable (private mode etc.)
   }
   const langs = navigator.languages?.length ? navigator.languages : [navigator.language];
   for (const l of langs) {
@@ -48,15 +48,15 @@ export function setLang(lang: Lang) {
   try {
     localStorage.setItem(STORAGE_KEY, lang);
   } catch {
-    // не страшно — просто не запомним выбор
+    // not critical — the choice just won't be remembered
   }
   applyToDocument();
   listeners.forEach((l) => l());
 }
 
 /**
- * Перевод по ключу. Параметры подставляются вместо `{name}`.
- * Можно вызывать и вне React (например, в тексте ошибок конвертеров).
+ * Translates a key. Params replace `{name}` placeholders.
+ * Works outside React too (e.g. for converter error messages).
  */
 export function t(key: Key, params?: Record<string, string | number>): string {
   let s: string = dicts[current][key] ?? ru[key] ?? key;
@@ -64,12 +64,12 @@ export function t(key: Key, params?: Record<string, string | number>): string {
   return s;
 }
 
-/** Переводит строку, если это ключ словаря, иначе возвращает как есть (форматы, единицы). */
+/** Translates the string if it's a dictionary key, otherwise returns it as is (formats, units). */
 export function tx(s: string, params?: Record<string, string | number>): string {
   return s in ru ? t(s as Key, params) : s;
 }
 
-/** Подписка компонента на смену языка: компонент перерисуется, когда язык поменяется. */
+/** Subscribes a component to language changes, so it re-renders on switch. */
 export function useLang(): Lang {
   return useSyncExternalStore(
     (cb) => {
@@ -80,7 +80,7 @@ export function useLang(): Lang {
   );
 }
 
-/** Ошибка, текст которой берётся из словаря на текущем языке. */
+/** An error whose message comes from the dictionary in the current language. */
 export class LocalizedError extends Error {
   constructor(key: Key, params?: Record<string, string | number>) {
     super(t(key, params));

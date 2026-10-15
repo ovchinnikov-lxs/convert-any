@@ -1,6 +1,6 @@
 /**
- * Конвертация текстовых документов. Общий промежуточный формат — HTML:
- * DOCX / Markdown / TXT / таблицы → HTML → PDF / DOCX / Markdown / TXT.
+ * Text-document conversions. Everything goes through HTML as the common format:
+ * DOCX / Markdown / TXT / spreadsheets → HTML → PDF / DOCX / Markdown / TXT.
  */
 import { getLang } from '../../i18n';
 
@@ -13,12 +13,12 @@ export async function readText(file: Blob): Promise<string> {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(buf);
   } catch {
-    // Старые русские текстовые файлы часто в Windows-1251.
+    // Old Russian text files are often Windows-1251.
     return new TextDecoder('windows-1251').decode(buf);
   }
 }
 
-// ---------- Вход → HTML
+// ---------- → HTML
 
 export async function docxToHtml(file: Blob): Promise<string> {
   const mammoth = await import('mammoth');
@@ -45,7 +45,7 @@ export function textToHtml(text: string): string {
     .join('\n');
 }
 
-/** Содержимое <body> HTML-документа (или сам фрагмент). Скрипты и стили выбрасываются. */
+/** Body content of an HTML document (or the fragment itself). Scripts and styles are dropped. */
 export function htmlBody(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll('script, style, noscript, iframe, object, embed').forEach((n) => n.remove());
@@ -74,24 +74,24 @@ ${body}
 `;
 }
 
-// ---------- HTML → выход
+// ---------- HTML →
 
 export async function htmlToMarkdown(html: string): Promise<string> {
   const [{ default: TurndownService }, gfm] = await Promise.all([import('turndown'), import('turndown-plugin-gfm')]);
   const td = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
   td.use(gfm.gfm);
-  // Встроенные base64-картинки раздули бы Markdown до бесполезности.
+  // Embedded base64 images would bloat the Markdown beyond usefulness.
   td.addRule('dataImages', {
     filter: (node) => node.nodeName === 'IMG' && (node.getAttribute('src') ?? '').startsWith('data:'),
     replacement: (_c, node) => `![${(node as HTMLElement).getAttribute('alt') ?? ''}](embedded-image)`,
   });
-  // В ячейках Markdown не бывает блоков: склеиваем абзацы в ячейках (Word кладёт <p> в каждую).
+  // Markdown table cells can't hold blocks: flatten paragraphs inside cells (Word puts <p> in every cell).
   const doc = new DOMParser().parseFromString(htmlBody(html), 'text/html');
   doc.querySelectorAll('td, th').forEach((cell) => {
     const parts = Array.from(cell.querySelectorAll('p, div, li')).map((b) => b.innerHTML.trim()).filter(Boolean);
     if (parts.length) cell.innerHTML = parts.join('<br>');
   });
-  // В таблицах без <th> первая строка становится заголовком, иначе GFM оставит сырой HTML.
+  // Tables without <th> get their first row promoted, otherwise GFM falls back to raw HTML.
   doc.querySelectorAll('table').forEach((t) => {
     if (t.querySelector('th')) return;
     const first = t.querySelector('tr');
@@ -104,7 +104,7 @@ export async function htmlToMarkdown(html: string): Promise<string> {
   return td.turndown(doc.body.innerHTML).trim() + '\n';
 }
 
-/** Простой текст по правилам вёрстки браузера (блочные элементы → переносы строк). */
+/** Plain text with the browser's own layout rules (block elements → line breaks). */
 export function htmlToText(html: string): string {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-99999px;top:0;width:800px;white-space:normal';
@@ -123,7 +123,7 @@ export interface PdfLayout {
   fontSize: number;
 }
 
-/** Настоящий текстовый PDF (текст выделяется, шрифт Roboto с кириллицей) через pdfmake. */
+/** Real text PDF (selectable, Cyrillic-capable Roboto font) via pdfmake. */
 export async function htmlToPdf(html: string, layout: PdfLayout): Promise<Blob> {
   const [{ default: pdfMake }, { default: vfs }, { default: htmlToPdfmake }] = await Promise.all([
     import('pdfmake/build/pdfmake'),
@@ -131,7 +131,7 @@ export async function htmlToPdf(html: string, layout: PdfLayout): Promise<Blob> 
     import('html-to-pdfmake'),
   ]);
   pdfMake.addVirtualFileSystem(vfs);
-  // Ничего не скачиваем из сети: всё содержимое локальное.
+  // Never fetch anything from the network: all content is local.
   pdfMake.setUrlAccessPolicy(() => false);
 
   const content = htmlToPdfmake(htmlBody(html), {
@@ -160,7 +160,7 @@ export async function htmlToPdf(html: string, layout: PdfLayout): Promise<Blob> 
   return new Blob([buffer as BlobPart], { type: 'application/pdf' });
 }
 
-/** HTML → DOCX: заголовки, абзацы, начертания, ссылки, списки, таблицы, код, встроенные PNG/JPEG. */
+/** HTML → DOCX: headings, paragraphs, inline styles, links, lists, tables, code, embedded PNG/JPEG images. */
 export async function htmlToDocx(html: string, title: string): Promise<Blob> {
   const d = await import('docx');
   const root = new DOMParser().parseFromString(htmlBody(html), 'text/html').body;

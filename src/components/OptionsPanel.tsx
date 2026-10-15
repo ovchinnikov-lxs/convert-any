@@ -5,12 +5,12 @@ interface Props {
   category: Category;
   format: string;
   options: Options;
-  /** Расширения добавленных файлов — от них зависит, какие настройки показывать. */
+  /** Extensions of the added files — they decide which settings are shown. */
   inputs: Set<string>;
   onChange: (key: string, value: OptionValue) => void;
 }
 
-/** Рисует настройки категории по их описанию (`fields`). */
+/** Renders a category's settings from their description (`fields`). */
 export function OptionsPanel({ category, format, options, inputs, onChange }: Props) {
   useLang();
   const fields = category.fields.filter((f) => !f.visible || f.visible(options, format, inputs));

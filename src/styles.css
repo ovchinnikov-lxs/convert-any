@@ -165,7 +165,7 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 
 .footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
 
-/* ---------- Сравнение до/после ---------- */
+/* ---------- Before / after viewer ---------- */
 .cmp-overlay {
   position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
   background: #0b0c10; color: #e8eaf1;
@@ -260,7 +260,7 @@ kbd {
 }
 .job-warning { font-size: 12px; color: var(--bad); margin-top: 4px; }
 
-/* ---------- Офлайн / PWA ---------- */
+/* ---------- Offline / PWA ---------- */
 .header-badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .pill {
   display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 999px; font-size: 13px;
@@ -279,7 +279,7 @@ kbd {
   font-size: 14px; max-width: calc(100% - 32px);
 }
 
-/* ---------- Переключатель языка ---------- */
+/* ---------- Language switch ---------- */
 .lang-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; background: var(--panel); }
 .lang-switch button {
   border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700;
