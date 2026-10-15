@@ -5,8 +5,9 @@ import { parseTime } from './categories/video';
 import type { Category, Options, OptionValue } from './categories/types';
 import { CompareViewer, type CompareItem } from './components/CompareViewer';
 import { Dropzone } from './components/Dropzone';
+import { OfflineStatus } from './components/OfflineStatus';
 import { OptionsPanel } from './components/OptionsPanel';
-import { isFFmpegLoaded, loadFFmpeg, runFFmpeg, cancelFFmpeg } from './lib/ffmpeg';
+import { isFFmpegLoaded, loadFFmpeg, runFFmpeg, cancelFFmpeg, probeMedia, type MediaInfo } from './lib/ffmpeg';
 import { baseName, browserDecodeToPng, downloadBlob, formatBytes } from './lib/utils';
 
 type JobStatus = 'queued' | 'running' | 'done' | 'error';
@@ -30,6 +31,10 @@ interface Job {
   previewUrl?: string;
   /** A combined output (e.g. merged PDF), not a source file. */
   merged?: boolean;
+  /** Probed source info (video). */
+  media?: MediaInfo;
+  /** Non-fatal note about the result (e.g. it didn't get smaller). */
+  warning?: string;
 }
 
 type EngineState = { state: 'idle' | 'loading' | 'ready' | 'error'; progress: number; error?: string };
@@ -90,7 +95,17 @@ export default function App() {
     }));
     setJobs((js) => [...js, ...added]);
     // Start fetching the engine in the background while the user picks settings.
-    if (usesFFmpeg) ensureEngine().catch(() => {});
+    if (usesFFmpeg) {
+      const engineReady = ensureEngine();
+      if (category.needsDuration) {
+        // Show codec / resolution / bitrate right away, so it's clear how compressible a file is.
+        for (const job of added)
+          engineReady
+            .then(() => probeMedia(job.file))
+            .then((media) => patchJob(job.id, { media }))
+            .catch(() => {});
+      }
+    }
   };
 
   // When the chosen format can't be made from any of the added files, switch to one that can.
@@ -149,14 +164,15 @@ export default function App() {
         file,
         outName: `result.${fmt.ext}`,
         probe: cat.needsDuration,
-        args: (input, info) => cat.buildArgs!({ input, file, format: fmt, options: opts, duration: info.duration }),
+        args: (input, info) =>
+          cat.buildArgs!({ input, file, format: fmt, options: opts, duration: info.duration, media: info }),
         onProgress: (p) => patchJob(job.id, { progress: p }),
       });
 
     let data: Uint8Array;
-    let fps: number | undefined;
+    let info: MediaInfo = {};
     try {
-      ({ data, info: { fps } } = await run(job.file));
+      ({ data, info } = await run(job.file));
     } catch (err) {
       // ffmpeg.wasm can't decode some image formats (AVIF, HEIC…) — let the browser decode them.
       if (cat.id !== 'image' || cancelled.current) throw err;
@@ -168,8 +184,15 @@ export default function App() {
     const blob = new Blob([data as BlobPart], { type: fmt.mime });
     setResult(job, blob, outName, fmt.label, {
       offset: cat.id === 'video' ? (parseTime(opts.start) ?? 0) : 0,
-      fps: Number(opts.fps) || fps || 30,
+      fps: Number(opts.fps) || info.fps || 30,
     });
+    if (cat.id === 'video') {
+      const warning =
+        ['mp4', 'mov', 'mkv', 'webm'].includes(fmt.id) && blob.size >= job.file.size * 0.9
+          ? 'Файл почти не уменьшился: исходник уже хорошо сжат. Уменьшите разрешение или качество, либо задайте «До размера файла».'
+          : undefined;
+      patchJob(job.id, { media: info.vcodec ? info : job.media, warning });
+    }
     return { blob, name: outName };
   };
 
@@ -191,7 +214,7 @@ export default function App() {
     const opts = { ...options };
     setBusy(true);
     cancelled.current = false;
-    queue.forEach((j) => patchJob(j.id, { status: 'queued', progress: 0, error: undefined }));
+    queue.forEach((j) => patchJob(j.id, { status: 'queued', progress: 0, error: undefined, warning: undefined }));
     const outputs: { blob: Blob; name: string }[] = [];
     try {
       if (cat.buildArgs && !cat.convert) await ensureEngine();
@@ -266,8 +289,11 @@ export default function App() {
             <p>Конвертер файлов прямо в браузере</p>
           </div>
         </div>
-        <div className="privacy" title="Конвертация выполняется в вашем браузере (WebAssembly и JavaScript) — без загрузки на сервер">
-          🔒 Файлы не покидают ваше устройство
+        <div className="header-badges">
+          <div className="privacy" title="Конвертация выполняется в вашем браузере (WebAssembly и JavaScript) — без загрузки на сервер">
+            🔒 Файлы не покидают ваше устройство
+          </div>
+          <OfflineStatus onDownloadEngine={ensureEngine} engineState={engine.state} busy={busy} />
         </div>
       </header>
 
@@ -464,6 +490,8 @@ function JobRow({
             <div style={{ width: `${Math.max(2, job.progress * 100)}%` }} />
           </div>
         )}
+        {job.media?.vcodec && <MediaLine media={job.media} />}
+        {job.warning && <div className="job-warning">{job.warning}</div>}
         {job.error && <div className="job-error">{job.error}</div>}
       </div>
       <div className="job-actions">
@@ -489,5 +517,40 @@ function JobRow({
         )}
       </div>
     </li>
+  );
+}
+
+const CODEC_NAMES: Record<string, string> = {
+  h264: 'H.264',
+  hevc: 'H.265',
+  vp8: 'VP8',
+  vp9: 'VP9',
+  av1: 'AV1',
+  mpeg4: 'MPEG-4',
+  prores: 'ProRes',
+};
+
+function MediaLine({ media: m }: { media: MediaInfo }) {
+  const parts = [
+    CODEC_NAMES[m.vcodec!] ?? m.vcodec!.toUpperCase(),
+    m.width && m.height ? `${m.width}×${m.height}` : '',
+    m.fps ? `${Math.round(m.fps * 100) / 100} к/с` : '',
+    m.vbitrate ? (m.vbitrate >= 1000 ? `${(m.vbitrate / 1000).toFixed(1)} Мбит/с` : `${m.vbitrate} кбит/с`) : '',
+  ].filter(Boolean);
+  // Bits per pixel per frame: phones record ~0.15–0.3; below ~0.07 the video is already heavily compressed.
+  const bpp = m.vbitrate && m.width && m.height ? (m.vbitrate * 1000) / (m.width * m.height * (m.fps || 30)) : 0;
+  const tight = bpp > 0 && bpp < 0.07;
+  return (
+    <div className="job-media">
+      {parts.join(' · ')}
+      {tight && (
+        <span
+          className="tag"
+          title="Битрейт исходника уже низкий. Заметно уменьшить файл можно только снизив разрешение или качество."
+        >
+          уже сильно сжат
+        </span>
+      )}
+    </div>
   );
 }

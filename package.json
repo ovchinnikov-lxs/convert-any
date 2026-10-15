@@ -14,6 +14,7 @@
   "dependencies": {
     "@e965/xlsx": "^0.20.3",
     "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/core-mt": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "docx": "^9.11.0",
@@ -36,6 +37,7 @@
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^5.1.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.7"
+    "vite": "^7.3.7",
+    "vite-plugin-pwa": "^1.1.0"
   }
 }

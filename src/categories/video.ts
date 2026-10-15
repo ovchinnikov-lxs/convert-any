@@ -37,8 +37,30 @@ function targetBitrate(ctx: BuildContext): number | null {
   if (options.mode !== 'size' || !duration) return null;
   const effective = clipDuration(options, duration);
   const totalKbits = (Number(options.targetMB) || 10) * 8 * 1024 * 0.93;
-  const audioKbps = options.removeAudio ? 0 : Number(options.audioBitrate) || 128;
-  return Math.max(50, Math.floor(totalKbits / effective - audioKbps));
+  const audioKbps = options.removeAudio ? 0 : audioKbit(ctx);
+  const kbps = Math.max(50, Math.floor(totalKbits / effective - audioKbps));
+  // A target above the source's size would only inflate the file.
+  const cap = videoCap(ctx);
+  return cap ? Math.min(kbps, cap) : kbps;
+}
+
+/**
+ * Audio bitrate: the chosen one, but never above the source's — re-encoding
+ * 64 kbit/s audio at 128 only makes the file bigger.
+ */
+function audioKbit(ctx: BuildContext): number {
+  const chosen = Number(ctx.options.audioBitrate) || 128;
+  const src = ctx.media?.abitrate;
+  return src ? Math.min(chosen, Math.max(32, Math.ceil(src / 8) * 8)) : chosen;
+}
+
+/**
+ * Upper bound for video bitrate in quality mode: a bit below the source's own,
+ * so re-encoding never makes a file bigger.
+ */
+function videoCap(ctx: BuildContext): number | null {
+  const v = ctx.media?.vbitrate;
+  return v && v > 50 ? Math.round(v * 0.9) : null;
 }
 
 function clipDuration(o: Options, duration: number) {
@@ -207,7 +229,7 @@ export const videoCategory: Category = {
     if (end != null) args.push('-t', String(Math.max(0.1, end - (start ?? 0))));
     args.push('-map_metadata', '-1');
 
-    const ab = `${o.audioBitrate || 128}k`;
+    const ab = `${audioKbit(ctx)}k`;
 
     if (AUDIO_ONLY.includes(format.id)) {
       args.push('-vn');
@@ -242,7 +264,7 @@ export const videoCategory: Category = {
         args.push('-c:v', 'libvpx', '-deadline', 'good', '-cpu-used', speed.vpx, '-auto-alt-ref', '0');
         if (kbps) args.push('-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`);
         // In libvpx, CRF only works together with a bitrate cap.
-        else args.push('-crf', crf(q, 6, 60), '-b:v', '20M');
+        else args.push('-crf', crf(q, 6, 60), '-b:v', `${Math.min(20000, videoCap(ctx) ?? 20000)}k`);
         args.push('-pix_fmt', 'yuv420p');
         if (!o.removeAudio) args.push('-c:a', 'libopus', '-b:a', ab);
         break;
@@ -255,7 +277,12 @@ export const videoCategory: Category = {
       default: // mp4, mov, mkv
         args.push('-c:v', 'libx264', '-preset', speed.x264, '-pix_fmt', 'yuv420p');
         if (kbps) args.push('-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`);
-        else args.push('-crf', crf(q, 18, 38));
+        else {
+          args.push('-crf', crf(q, 18, 38));
+          // Capped CRF: the result never needs more bits than the source had.
+          const cap = videoCap(ctx);
+          if (cap) args.push('-maxrate', `${cap}k`, '-bufsize', `${cap}k`);
+        }
         if (!o.removeAudio) args.push('-c:a', 'aac', '-b:a', ab);
         if (format.id !== 'mkv') args.push('-movflags', '+faststart');
     }

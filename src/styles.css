@@ -253,3 +253,28 @@ kbd {
 }
 .format:disabled:not(.active) { opacity: 0.35; }
 .thumb:has(.ext) { background: var(--bg); }
+.job-media { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.job-media .tag {
+  font-size: 11px; font-weight: 600; padding: 0 7px; border-radius: 999px; cursor: help;
+  background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad);
+}
+.job-warning { font-size: 12px; color: var(--bad); margin-top: 4px; }
+
+/* ---------- Offline / PWA ---------- */
+.header-badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pill {
+  display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 999px; font-size: 13px;
+  border: 1px solid transparent; font-weight: 500; white-space: nowrap;
+}
+.pill.ok { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.pill.muted { background: var(--panel); border-color: var(--border); color: var(--muted); }
+.pill.warn { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.pill.action { background: var(--panel); border-color: var(--accent); color: var(--accent); cursor: pointer; }
+.pill.action:hover:not(:disabled) { background: var(--accent-soft); }
+.pill.action:disabled { opacity: 0.7; cursor: progress; }
+.update-toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--border); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  font-size: 14px; max-width: calc(100% - 32px);
+}

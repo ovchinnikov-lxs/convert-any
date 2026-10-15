@@ -33,6 +33,8 @@ export interface BuildContext {
   options: Options;
   /** Media duration in seconds, when known. */
   duration?: number;
+  /** Probed source info (codecs, bitrates), when known. */
+  media?: import('../lib/ffmpeg').MediaInfo;
 }
 
 export interface ConvertContext {
