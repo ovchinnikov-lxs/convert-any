@@ -1,0 +1,6 @@
+node_modules
+dist
+public/ffmpeg
+.vercel
+*.log
+*.tsbuildinfo
