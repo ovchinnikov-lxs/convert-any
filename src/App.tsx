@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { categories } from './categories';
+import { parseTime } from './categories/video';
 import type { Category, Options, OptionValue } from './categories/types';
+import { CompareViewer, type CompareItem } from './components/CompareViewer';
 import { Dropzone } from './components/Dropzone';
 import { OptionsPanel } from './components/OptionsPanel';
 import { isFFmpegLoaded, loadFFmpeg, runFFmpeg, cancelFFmpeg } from './lib/ffmpeg';
@@ -15,7 +17,15 @@ interface Job {
   status: JobStatus;
   progress: number;
   error?: string;
-  result?: { blob: Blob; url: string; name: string; format: string };
+  result?: {
+    blob: Blob;
+    url: string;
+    name: string;
+    format: string;
+    /** For before/after: trim start of the result and its frame rate. */
+    offset: number;
+    fps: number;
+  };
   previewUrl?: string;
 }
 
@@ -35,6 +45,7 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [engine, setEngine] = useState<EngineState>({ state: 'idle', progress: 0 });
   const [busy, setBusy] = useState(false);
+  const [compare, setCompare] = useState<CompareItem | null>(null);
   const cancelled = useRef(false);
 
   const category = categories.find((c) => c.id === categoryId)!;
@@ -112,14 +123,15 @@ export default function App() {
       });
 
     let data: Uint8Array;
+    let fps: number | undefined;
     try {
-      data = await run(job.file);
+      ({ data, info: { fps } } = await run(job.file));
     } catch (err) {
       // ffmpeg.wasm can't decode some image formats (AVIF, HEIC…) — let the browser decode them.
       if (cat.id !== 'image' || cancelled.current) throw err;
       const decoded = await browserDecodeToPng(job.file).catch(() => null);
       if (!decoded) throw err;
-      data = await run(decoded).catch(() => Promise.reject(err));
+      ({ data } = await run(decoded).catch(() => Promise.reject(err)));
     }
 
     const blob = new Blob([data as BlobPart], { type: fmt.mime });
@@ -127,7 +139,14 @@ export default function App() {
     patchJob(job.id, {
       status: 'done',
       progress: 1,
-      result: { blob, url: URL.createObjectURL(blob), name: outName, format: fmt.label },
+      result: {
+        blob,
+        url: URL.createObjectURL(blob),
+        name: outName,
+        format: fmt.label,
+        offset: cat.id === 'video' ? (parseTime(opts.start) ?? 0) : 0,
+        fps: Number(opts.fps) || fps || 30,
+      },
     });
   };
 
@@ -228,6 +247,18 @@ export default function App() {
                   busy={busy}
                   onRemove={() => removeJob(job.id)}
                   onRetry={() => convertAll(job.id)}
+                  onCompare={() => {
+                    const r = job.result!;
+                    setCompare({
+                      kind: job.categoryId === 'video' ? 'video' : 'image',
+                      original: job.file,
+                      result: r.blob,
+                      resultUrl: r.url,
+                      resultName: r.name,
+                      offset: r.offset,
+                      fps: r.fps,
+                    });
+                  }}
                 />
               ))}
             </ul>
@@ -292,6 +323,8 @@ export default function App() {
         </aside>
       </main>
 
+      {compare && <CompareViewer item={compare} engineFree={!busy} onClose={() => setCompare(null)} />}
+
       <footer className="footer">
         Работает на <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noreferrer">ffmpeg.wasm</a>.
         Вся обработка выполняется локально — без серверов и загрузок.
@@ -325,12 +358,15 @@ function JobRow({
   busy,
   onRemove,
   onRetry,
+  onCompare,
 }: {
   job: Job;
   busy: boolean;
   onRemove: () => void;
   onRetry: () => void;
+  onCompare: () => void;
 }) {
+  const comparable = job.result && !job.result.blob.type.startsWith('audio/');
   const thumb = job.result?.blob.type.startsWith('image/') ? job.result.url : job.previewUrl;
   return (
     <li className={`job ${job.status}`}>
@@ -361,6 +397,11 @@ function JobRow({
         {job.error && <div className="job-error">{job.error}</div>}
       </div>
       <div className="job-actions">
+        {comparable && (
+          <button className="btn ghost small" onClick={onCompare} title="Сравнить до и после">
+            Сравнить
+          </button>
+        )}
         {job.result && (
           <a className="btn primary small" href={job.result.url} download={job.result.name}>
             Скачать

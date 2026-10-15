@@ -164,3 +164,86 @@ fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .icon-btn:hover:not(:disabled) { background: var(--bg); color: var(--text); }
 
 .footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* ---------- Before / after viewer ---------- */
+.cmp-overlay {
+  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+  background: #0b0c10; color: #e8eaf1;
+}
+.cmp-top, .cmp-bottom, .cmp-video {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px; flex-wrap: wrap;
+}
+.cmp-top { justify-content: space-between; border-bottom: 1px solid #23262f; }
+.cmp-title { font-weight: 600; min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-close { color: #e8eaf1; font-size: 16px; }
+.cmp-close:hover { background: #23262f !important; color: #fff !important; }
+.seg { display: inline-flex; background: #1a1d25; border-radius: 10px; padding: 3px; }
+.seg button {
+  border: 0; background: transparent; color: #aab0c0; padding: 6px 12px; border-radius: 8px;
+  cursor: pointer; font-weight: 600; font-size: 13px;
+}
+.seg button.active { background: #8b7fff; color: #fff; }
+
+.cmp-viewport {
+  position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; touch-action: none;
+  user-select: none;
+  background: repeating-conic-gradient(#16181f 0 25%, #1d2029 0 50%) 50% / 20px 20px;
+}
+.cmp-viewport:active { cursor: grabbing; }
+.cmp-pane { position: absolute; inset: 0; overflow: hidden; }
+.mode-side .cmp-pane { right: auto; }
+.mode-side .cmp-pane + .cmp-pane { border-left: 2px solid #8b7fff; }
+.cmp-media { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; pointer-events: none; }
+.cmp-divider {
+  position: absolute; top: 0; bottom: 0; width: 32px; margin-left: -16px; cursor: ew-resize;
+  display: flex; align-items: center; justify-content: center;
+}
+.cmp-divider::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
+  background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.cmp-grip {
+  position: relative; width: 34px; height: 34px; border-radius: 50%; background: #fff; color: #222;
+  display: grid; place-items: center; font-size: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.cmp-badge {
+  position: absolute; top: 12px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: rgba(0, 0, 0, 0.6); color: #fff; pointer-events: none; letter-spacing: 0.03em;
+}
+.cmp-badge.left { left: 12px; }
+.cmp-badge.right { right: 12px; background: rgba(109, 94, 252, 0.85); }
+.cmp-badge.big { left: 50%; transform: translateX(-50%); font-size: 15px; padding: 6px 16px; }
+.cmp-badge.big.after { background: rgba(109, 94, 252, 0.9); }
+.cmp-status {
+  position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+  align-items: center; justify-content: center; padding: 24px; text-align: center;
+}
+.cmp-status .bar { width: min(320px, 80%); background: #2a2f3d; }
+.cmp-error { color: #ff8a8a; max-width: 480px; }
+
+.cmp-video { border-top: 1px solid #23262f; }
+.cmp-timeline { flex: 1; min-width: 160px; accent-color: #8b7fff; }
+.cmp-time { font-variant-numeric: tabular-nums; font-size: 13px; color: #aab0c0; white-space: nowrap; }
+.cmp-play { min-width: 40px; }
+.cmp-video select {
+  background: #1a1d25; border: 1px solid #2a2f3d; border-radius: 8px; padding: 4px 6px; color: #e8eaf1;
+}
+.cmp-bottom { justify-content: space-between; border-top: 1px solid #23262f; }
+.cmp-info { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: #aab0c0; }
+.cmp-info b { color: #e8eaf1; font-weight: 600; }
+.cmp-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cmp-overlay .btn.ghost { border-color: #2a2f3d; color: #e8eaf1; }
+.cmp-overlay .btn.ghost.on { border-color: #8b7fff; color: #b9b1ff; }
+.cmp-zoom { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
+.cmp-hints { padding: 0 16px 10px; font-size: 12px; color: #7d8496; }
+kbd {
+  display: inline-block; padding: 0 5px; border-radius: 4px; border: 1px solid #3a3f4d;
+  background: #1a1d25; font: 11px/1.6 ui-monospace, monospace; color: #cfd3de;
+}
+@media (max-width: 640px) {
+  .cmp-hints { display: none; }
+  .cmp-top { gap: 8px; }
+  .cmp-title { flex-basis: calc(100% - 50px); order: 0; }
+  .seg { order: 2; }
+}
+.btn kbd { margin-left: 6px; }

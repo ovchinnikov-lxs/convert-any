@@ -2,7 +2,7 @@ import type { BuildContext, Category, Options } from './types';
 
 const AUDIO_ONLY = ['mp3', 'm4a', 'ogg', 'wav'];
 
-function parseTime(v: unknown): number | null {
+export function parseTime(v: unknown): number | null {
   const s = String(v ?? '').trim().replace(',', '.');
   if (!s) return null;
   const parts = s.split(':').map(Number);

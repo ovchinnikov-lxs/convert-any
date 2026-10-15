@@ -70,6 +70,12 @@ function terminateFFmpeg() {
 
 export interface MediaInfo {
   duration?: number;
+  fps?: number;
+}
+
+export interface RunResult {
+  data: Uint8Array;
+  info: MediaInfo;
 }
 
 export interface RunOptions {
@@ -89,7 +95,7 @@ let jobCounter = 0;
  * Runs one conversion. ffmpeg.wasm occasionally ends up in a broken state
  * after earlier runs, so on failure we retry once on a fresh instance.
  */
-export async function runFFmpeg(opts: RunOptions): Promise<Uint8Array> {
+export async function runFFmpeg(opts: RunOptions): Promise<RunResult> {
   const gen = generation;
   try {
     return await runOnce(opts);
@@ -105,7 +111,7 @@ export async function runFFmpeg(opts: RunOptions): Promise<Uint8Array> {
   }
 }
 
-async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOptions): Promise<Uint8Array> {
+async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOptions): Promise<RunResult> {
   const ff = await loadFFmpeg();
   const job = ++jobCounter;
   const mountDir = `/in${job}`;
@@ -145,6 +151,7 @@ async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOpt
       // Exits with an error (no output given) but prints the stream info.
       await ff.exec(['-hide_banner', '-i', inputPath]);
       info.duration = parseDuration(logs.slice(start));
+      info.fps = parseFps(logs.slice(start));
     }
     const code = await ff.exec(['-hide_banner', '-y', ...args(inputPath, info), outPath]);
     if (code !== 0) {
@@ -152,7 +159,7 @@ async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOpt
     }
     const data = await ff.readFile(outPath);
     if (typeof data === 'string' || data.length === 0) throw new Error('Пустой результат');
-    return data;
+    return { data, info };
   } finally {
     ff.off('log', logHandler);
     ff.off('progress', progressHandler);
@@ -170,6 +177,14 @@ function parseDuration(lines: string[]): number | undefined {
   for (const l of lines) {
     const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(l);
     if (m) return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  }
+  return undefined;
+}
+
+function parseFps(lines: string[]): number | undefined {
+  for (const l of lines) {
+    const m = /Stream #.*Video:.*?(\d+(?:\.\d+)?) fps/.exec(l);
+    if (m) return Number(m[1]);
   }
   return undefined;
 }
