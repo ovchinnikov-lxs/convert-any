@@ -1,42 +1,58 @@
+import type { Key } from '../i18n';
+import type { MediaInfo } from '../lib/ffmpeg';
+
 export type OptionValue = string | number | boolean;
 export type Options = Record<string, OptionValue>;
 
 export interface FormatDef {
   id: string;
+  /** Название формата (PNG, Markdown…) — одинаковое на всех языках. */
   label: string;
   ext: string;
   mime: string;
-  hint?: string;
-  /** Input extensions (lowercase, no dot) this format can be produced from. Omitted = any. */
+  hint?: Key;
+  /** Из каких расширений (строчными, без точки) можно получить этот формат. Не задано — из любых. */
   from?: string[];
 }
 
 interface FieldBase {
+  /** Имя опции в `Options`. */
   key: string;
-  label: string;
-  hint?: string;
-  /** Show the field only when this returns true. `inputs` = extensions of the added files. */
+  label: Key;
+  hint?: Key;
+  /** Показывать поле, только если функция вернула true. `inputs` — расширения добавленных файлов. */
   visible?: (options: Options, format: string, inputs: Set<string>) => boolean;
 }
 
+/** Вариант выбора: подпись — ключ словаря или текст как есть (например «720p»), с параметрами. */
+export interface Choice {
+  value: string;
+  label: Key | string;
+  params?: Record<string, string | number>;
+}
+
+/** `unit` — ключ словаря или символ как есть (%, px). */
 export type FieldDef =
   | (FieldBase & { type: 'slider'; min: number; max: number; step?: number; unit?: string })
-  | (FieldBase & { type: 'number'; min?: number; max?: number; step?: number; placeholder?: string; unit?: string })
-  | (FieldBase & { type: 'select'; choices: { value: string; label: string }[] })
+  | (FieldBase & { type: 'number'; min?: number; max?: number; step?: number; placeholder?: Key; unit?: string })
+  | (FieldBase & { type: 'select'; choices: Choice[] })
   | (FieldBase & { type: 'checkbox' })
-  | (FieldBase & { type: 'text'; placeholder?: string });
+  | (FieldBase & { type: 'text'; placeholder?: Key | string });
 
+/** Всё, что нужно, чтобы собрать аргументы ffmpeg. */
 export interface BuildContext {
+  /** Путь к входному файлу внутри файловой системы ffmpeg. */
   input: string;
   file: File;
   format: FormatDef;
   options: Options;
-  /** Media duration in seconds, when known. */
+  /** Длительность в секундах, если известна. */
   duration?: number;
-  /** Probed source info (codecs, bitrates), when known. */
-  media?: import('../lib/ffmpeg').MediaInfo;
+  /** Сведения об исходнике (кодеки, битрейты), если известны. */
+  media?: MediaInfo;
 }
 
+/** Всё, что нужно собственному (не ffmpeg) конвертеру. */
 export interface ConvertContext {
   file: File;
   format: FormatDef;
@@ -46,31 +62,32 @@ export interface ConvertContext {
 
 export interface ConvertOutput {
   blob: Blob;
-  /** File name including extension. */
+  /** Имя файла с расширением. */
   name: string;
 }
 
+/** Раздел конвертера (вкладка): форматы, настройки и способ конвертации. */
 export interface Category {
   id: string;
-  title: string;
+  title: Key;
   icon: string;
-  description: string;
+  description: Key;
   status: 'ready' | 'soon';
-  /** `accept` attribute for the file picker. */
+  /** Атрибут `accept` для выбора файлов. */
   accept: string;
   formats: FormatDef[];
   defaultFormat: string;
   defaultOptions: Options;
   fields: FieldDef[];
-  /** ffmpeg arguments between `-i` handling and the output path. */
+  /** Аргументы ffmpeg (вместе с `-i`) без выходного пути. */
   buildArgs?: (ctx: BuildContext) => string[];
-  /** Custom (non-ffmpeg) converter. Used instead of `buildArgs` when present. */
+  /** Собственный (не ffmpeg) конвертер. Если задан, используется вместо `buildArgs`. */
   convert?: (ctx: ConvertContext) => Promise<ConvertOutput>;
-  /** Combines several results into one file (e.g. merge PDFs), when `canMerge` says so. */
+  /** Склеивает несколько результатов в один файл (например, PDF), если `canMerge` разрешает. */
   merge?: (outputs: ConvertOutput[], options: Options) => Promise<ConvertOutput>;
   canMerge?: (format: string, options: Options) => boolean;
-  /** Optional per-format option overrides applied when the format is picked. */
+  /** Значения настроек, которые подставляются при выборе формата. */
   formatDefaults?: Record<string, Options>;
-  /** Whether the category needs the media duration (e.g. for target-size mode). */
+  /** Нужно ли перед конвертацией анализировать файл (длительность, битрейт). */
   needsDuration?: boolean;
 }

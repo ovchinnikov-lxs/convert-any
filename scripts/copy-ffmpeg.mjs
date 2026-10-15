@@ -1,7 +1,7 @@
-// Copies the ffmpeg.wasm cores into public/ so they are served from our own
-// origin (no third-party CDN, cacheable for offline use).
-//   public/ffmpeg/st — single-threaded core (works everywhere)
-//   public/ffmpeg/mt — multi-threaded core (needs a cross-origin isolated page)
+// Копирует ядра ffmpeg.wasm в public/, чтобы они отдавались с нашего домена
+// (без сторонних CDN и с возможностью кэша для офлайна).
+//   public/ffmpeg/st — однопоточное ядро (работает везде)
+//   public/ffmpeg/mt — многопоточное ядро (нужна изолированная страница)
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 

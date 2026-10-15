@@ -7,11 +7,13 @@ import { CompareViewer, type CompareItem } from './components/CompareViewer';
 import { Dropzone } from './components/Dropzone';
 import { OfflineStatus } from './components/OfflineStatus';
 import { OptionsPanel } from './components/OptionsPanel';
+import { LocalizedError, setLang, t, useLang, type Key, type Lang } from './i18n';
 import { isFFmpegLoaded, loadFFmpeg, runFFmpeg, cancelFFmpeg, probeMedia, type MediaInfo } from './lib/ffmpeg';
 import { baseName, browserDecodeToPng, downloadBlob, formatBytes } from './lib/utils';
 
 type JobStatus = 'queued' | 'running' | 'done' | 'error';
 
+/** Один файл в очереди и его результат. */
 interface Job {
   id: number;
   categoryId: string;
@@ -24,23 +26,24 @@ interface Job {
     url: string;
     name: string;
     format: string;
-    /** For before/after: trim start of the result and its frame rate. */
+    /** Для сравнения «до/после»: начало обрезки и частота кадров результата. */
     offset: number;
     fps: number;
   };
   previewUrl?: string;
-  /** A combined output (e.g. merged PDF), not a source file. */
+  /** Объединённый результат (например, склеенный PDF), а не исходный файл. */
   merged?: boolean;
-  /** Probed source info (video). */
+  /** Сведения об исходнике (видео). */
   media?: MediaInfo;
-  /** Non-fatal note about the result (e.g. it didn't get smaller). */
-  warning?: string;
+  /** Замечание к результату (например, файл почти не уменьшился). */
+  warning?: Key;
 }
 
 type EngineState = { state: 'idle' | 'loading' | 'ready' | 'error'; progress: number; error?: string };
 
 let nextId = 1;
 
+/** Настройки по умолчанию для каждой категории. */
 function initialSettings() {
   return Object.fromEntries(
     categories.map((c) => [c.id, { format: c.defaultFormat, options: { ...c.defaultOptions } }]),
@@ -48,6 +51,7 @@ function initialSettings() {
 }
 
 export default function App() {
+  useLang();
   const [categoryId, setCategoryId] = useState(categories[0].id);
   const [settings, setSettings] = useState(initialSettings);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -62,6 +66,7 @@ export default function App() {
   const sourceJobs = useMemo(() => categoryJobs.filter((j) => !j.merged), [categoryJobs]);
   const inputs = useMemo(() => new Set(sourceJobs.map((j) => extOf(j.file.name))), [sourceJobs]);
   const usesFFmpeg = Boolean(category.buildArgs && !category.convert);
+  /** Можно ли получить формат из файла с таким расширением. */
   const compatible = (fmtId: string, ext: string) => {
     const from = category.formats.find((f) => f.id === fmtId)?.from;
     return !from || from.includes(ext);
@@ -72,6 +77,7 @@ export default function App() {
     setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
 
+  /** Загружает движок ffmpeg (один раз), показывая прогресс. */
   const ensureEngine = useCallback(async () => {
     if (isFFmpegLoaded()) return;
     setEngine({ state: 'loading', progress: 0 });
@@ -94,11 +100,11 @@ export default function App() {
       previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
     }));
     setJobs((js) => [...js, ...added]);
-    // Start fetching the engine in the background while the user picks settings.
+    // Начинаем грузить движок в фоне, пока пользователь выбирает настройки.
     if (usesFFmpeg) {
       const engineReady = ensureEngine();
       if (category.needsDuration) {
-        // Show codec / resolution / bitrate right away, so it's clear how compressible a file is.
+        // Сразу показываем кодек, разрешение и битрейт — видно, насколько файл можно сжать.
         for (const job of added)
           engineReady
             .then(() => probeMedia(job.file))
@@ -108,12 +114,11 @@ export default function App() {
     }
   };
 
-  // When the chosen format can't be made from any of the added files, switch to one that can.
+  // Если выбранный формат нельзя получить ни из одного файла — переключаемся на подходящий.
   useEffect(() => {
     if (!inputs.size || formatAvailable(format)) return;
     const next = category.formats.find((f) => formatAvailable(f.id));
     if (next) setFormat(next.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputs, format, categoryId]);
 
   const removeJob = (id: number) => {
@@ -146,7 +151,10 @@ export default function App() {
     const fmt = cat.formats.find((f) => f.id === fmtId)!;
     const ext = extOf(job.file.name);
     if (fmt.from && !fmt.from.includes(ext)) {
-      throw new Error(`${ext ? '.' + ext.toUpperCase() : 'Этот файл'} нельзя сконвертировать в ${fmt.label}`);
+      throw new LocalizedError('job.errIncompatible', {
+        what: ext ? '.' + ext.toUpperCase() : t('job.thisFile'),
+        format: fmt.label,
+      });
     }
     patchJob(job.id, { status: 'running', progress: 0, error: undefined });
 
@@ -174,7 +182,7 @@ export default function App() {
     try {
       ({ data, info } = await run(job.file));
     } catch (err) {
-      // ffmpeg.wasm can't decode some image formats (AVIF, HEIC…) — let the browser decode them.
+      // Некоторые форматы (AVIF, HEIC…) ffmpeg.wasm не читает — пусть их декодирует браузер.
       if (cat.id !== 'image' || cancelled.current) throw err;
       const decoded = await browserDecodeToPng(job.file).catch(() => null);
       if (!decoded) throw err;
@@ -189,7 +197,7 @@ export default function App() {
     if (cat.id === 'video') {
       const warning =
         ['mp4', 'mov', 'mkv', 'webm'].includes(fmt.id) && blob.size >= job.file.size * 0.9
-          ? 'Файл почти не уменьшился: исходник уже хорошо сжат. Уменьшите разрешение или качество, либо задайте «До размера файла».'
+          ? 'job.warnNotSmaller'
           : undefined;
       patchJob(job.id, { media: info.vcodec ? info : job.media, warning });
     }
@@ -227,14 +235,14 @@ export default function App() {
             patchJob(job.id, { status: 'queued', progress: 0 });
             break;
           }
-          patchJob(job.id, { status: 'error', error: (e as Error).message || 'Ошибка конвертации' });
+          patchJob(job.id, { status: 'error', error: (e as Error).message || t('job.errGeneric') });
         }
       }
       if (!only && !cancelled.current && cat.merge && cat.canMerge?.(fmt, opts) && outputs.length > 1) {
         await addMerged(cat, await cat.merge(outputs, opts));
       }
     } catch {
-      // engine failed to load; state already reflects it
+      // движок не загрузился — это уже показано в интерфейсе
     } finally {
       setBusy(false);
     }
@@ -244,7 +252,7 @@ export default function App() {
     const file = new File([out.blob], out.name, { type: out.blob.type });
     const label = cat.formats.find((f) => f.ext === extOf(out.name))?.label ?? '';
     setJobs((js) => [
-      // Replace a previous merged result of this category.
+      // Заменяем прежний объединённый результат этой категории.
       ...js.filter((j) => !(j.merged && j.categoryId === cat.id)),
       {
         id: nextId++,
@@ -286,36 +294,37 @@ export default function App() {
           <img src="/favicon.svg" alt="" width={36} height={36} />
           <div>
             <h1>Convert Any</h1>
-            <p>Конвертер файлов прямо в браузере</p>
+            <p>{t('app.subtitle')}</p>
           </div>
         </div>
         <div className="header-badges">
-          <div className="privacy" title="Конвертация выполняется в вашем браузере (WebAssembly и JavaScript) — без загрузки на сервер">
-            🔒 Файлы не покидают ваше устройство
+          <div className="privacy" title={t('app.privacyTitle')}>
+            {t('app.privacy')}
           </div>
           <OfflineStatus onDownloadEngine={ensureEngine} engineState={engine.state} busy={busy} />
+          <LangSwitch />
         </div>
       </header>
 
-      <nav className="tabs" aria-label="Категории">
+      <nav className="tabs" aria-label={t('app.categories')}>
         {categories.map((c) => (
           <button
             key={c.id}
             className={`tab${c.id === categoryId ? ' active' : ''}`}
             disabled={c.status === 'soon' || busy}
             onClick={() => setCategoryId(c.id)}
-            title={c.description}
+            title={t(c.description)}
           >
             <span className="tab-icon">{c.icon}</span>
-            {c.title}
-            {c.status === 'soon' && <span className="soon">скоро</span>}
+            {t(c.title)}
+            {c.status === 'soon' && <span className="soon">{t('app.soon')}</span>}
           </button>
         ))}
       </nav>
 
       <main className="layout">
         <section className="panel files-panel">
-          <p className="cat-desc">{category.description}</p>
+          <p className="cat-desc">{t(category.description)}</p>
           <Dropzone accept={category.accept} onFiles={addFiles} compact={categoryJobs.length > 0} />
 
           {categoryJobs.length > 0 && (
@@ -347,7 +356,7 @@ export default function App() {
           {doneJobs.length > 1 && (
             <div className="summary">
               <span>
-                Итого: {formatBytes(totals.before)} → <strong>{formatBytes(totals.after)}</strong>{' '}
+                {t('app.total')} {formatBytes(totals.before)} → <strong>{formatBytes(totals.after)}</strong>{' '}
                 <SizeDelta before={totals.before} after={totals.after} />
               </span>
               <button
@@ -359,21 +368,25 @@ export default function App() {
                   }
                 }}
               >
-                Скачать все
+                {t('app.downloadAll')}
               </button>
             </div>
           )}
         </section>
 
         <aside className="panel settings-panel">
-          <h2>Конвертировать в</h2>
+          <h2>{t('app.convertTo')}</h2>
           <div className="formats">
             {category.formats.map((f) => (
               <button
                 key={f.id}
                 className={`format${f.id === format ? ' active' : ''}`}
                 onClick={() => setFormat(f.id)}
-                title={formatAvailable(f.id) ? f.hint : `Недоступно для добавленных файлов. ${f.hint ?? ''}`}
+                title={
+                  formatAvailable(f.id)
+                    ? f.hint && t(f.hint)
+                    : `${t('app.unavailableFormat')} ${f.hint ? t(f.hint) : ''}`
+                }
                 disabled={busy || !formatAvailable(f.id)}
               >
                 {f.label}
@@ -381,10 +394,10 @@ export default function App() {
             ))}
           </div>
           {category.formats.find((f) => f.id === format)?.hint && (
-            <p className="format-hint">{category.formats.find((f) => f.id === format)!.hint}</p>
+            <p className="format-hint">{t(category.formats.find((f) => f.id === format)!.hint!)}</p>
           )}
 
-          <h2>Настройки</h2>
+          <h2>{t('app.settings')}</h2>
           <fieldset disabled={busy}>
             <OptionsPanel category={category} format={format} options={options} inputs={inputs} onChange={setOption} />
           </fieldset>
@@ -393,11 +406,12 @@ export default function App() {
 
           {busy ? (
             <button className="btn danger big" onClick={cancel}>
-              Остановить
+              {t('app.stop')}
             </button>
           ) : (
             <button className="btn primary big" disabled={!sourceJobs.length} onClick={() => convertAll()}>
-              Конвертировать{sourceJobs.length ? ` (${sourceJobs.length})` : ''}
+              {t('app.convert')}
+              {sourceJobs.length ? ` (${sourceJobs.length})` : ''}
             </button>
           )}
         </aside>
@@ -406,9 +420,11 @@ export default function App() {
       {compare && <CompareViewer item={compare} engineFree={!busy} onClose={() => setCompare(null)} />}
 
       <footer className="footer">
-        Работает на <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noreferrer">ffmpeg.wasm</a>, pdf.js,
-        pdf-lib, SheetJS и mammoth.
-        Вся обработка выполняется локально — без серверов и загрузок.
+        {t('app.footerPowered')}{' '}
+        <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noreferrer">
+          ffmpeg.wasm
+        </a>
+        , pdf.js, pdf-lib, SheetJS {t('app.footerAnd')} mammoth. {t('app.footerLocal')}
       </footer>
     </div>
   );
@@ -418,14 +434,14 @@ function EngineStatus({ engine }: { engine: EngineState }) {
   if (engine.state === 'loading')
     return (
       <div className="engine">
-        <span>Загрузка движка ffmpeg (≈31 МБ, один раз)… {Math.round(engine.progress * 100)}%</span>
+        <span>{t('app.engineLoading', { pct: Math.round(engine.progress * 100) })}</span>
         <div className="bar">
           <div style={{ width: `${engine.progress * 100}%` }} />
         </div>
       </div>
     );
   if (engine.state === 'error')
-    return <div className="engine error">Не удалось загрузить движок: {engine.error}</div>;
+    return <div className="engine error">{t('app.engineError', { error: engine.error ?? '' })}</div>;
   return null;
 }
 
@@ -469,7 +485,7 @@ function JobRow({
         <div className="job-meta">
           {job.merged ? (
             <>
-              <strong>{formatBytes(job.file.size)}</strong> · объединённый результат
+              <strong>{formatBytes(job.file.size)}</strong> · {t('job.merged')}
             </>
           ) : (
             formatBytes(job.file.size)
@@ -483,7 +499,7 @@ function JobRow({
             </>
           )}
           {job.status === 'running' && <> · {Math.round(job.progress * 100)}%</>}
-          {job.status === 'queued' && busy && <> · в очереди</>}
+          {job.status === 'queued' && busy && <> · {t('job.queued')}</>}
         </div>
         {job.status === 'running' && (
           <div className="bar">
@@ -491,27 +507,27 @@ function JobRow({
           </div>
         )}
         {job.media?.vcodec && <MediaLine media={job.media} />}
-        {job.warning && <div className="job-warning">{job.warning}</div>}
+        {job.warning && <div className="job-warning">{t(job.warning)}</div>}
         {job.error && <div className="job-error">{job.error}</div>}
       </div>
       <div className="job-actions">
         {comparable && (
-          <button className="btn ghost small" onClick={onCompare} title="Сравнить до и после">
-            Сравнить
+          <button className="btn ghost small" onClick={onCompare} title={t('job.compareTitle')}>
+            {t('job.compare')}
           </button>
         )}
         {job.result && (
           <a className="btn primary small" href={job.result.url} download={job.result.name}>
-            Скачать
+            {t('job.download')}
           </a>
         )}
         {job.status === 'error' && !busy && (
           <button className="btn ghost small" onClick={onRetry}>
-            Повторить
+            {t('job.retry')}
           </button>
         )}
         {job.status !== 'running' && (
-          <button className="icon-btn" onClick={onRemove} disabled={busy} aria-label="Убрать файл">
+          <button className="icon-btn" onClick={onRemove} disabled={busy} aria-label={t('job.remove')}>
             ✕
           </button>
         )}
@@ -534,10 +550,14 @@ function MediaLine({ media: m }: { media: MediaInfo }) {
   const parts = [
     CODEC_NAMES[m.vcodec!] ?? m.vcodec!.toUpperCase(),
     m.width && m.height ? `${m.width}×${m.height}` : '',
-    m.fps ? `${Math.round(m.fps * 100) / 100} к/с` : '',
-    m.vbitrate ? (m.vbitrate >= 1000 ? `${(m.vbitrate / 1000).toFixed(1)} Мбит/с` : `${m.vbitrate} кбит/с`) : '',
+    m.fps ? `${Math.round(m.fps * 100) / 100} ${t('unit.fps')}` : '',
+    m.vbitrate
+      ? m.vbitrate >= 1000
+        ? `${(m.vbitrate / 1000).toFixed(1)} ${t('unit.mbps')}`
+        : `${m.vbitrate} ${t('unit.kbps')}`
+      : '',
   ].filter(Boolean);
-  // Bits per pixel per frame: phones record ~0.15–0.3; below ~0.07 the video is already heavily compressed.
+  // Бит на пиксель кадра: телефоны пишут ~0,15–0,3; ниже ~0,07 видео уже сильно сжато.
   const bpp = m.vbitrate && m.width && m.height ? (m.vbitrate * 1000) / (m.width * m.height * (m.fps || 30)) : 0;
   const tight = bpp > 0 && bpp < 0.07;
   return (
@@ -546,11 +566,25 @@ function MediaLine({ media: m }: { media: MediaInfo }) {
       {tight && (
         <span
           className="tag"
-          title="Битрейт исходника уже низкий. Заметно уменьшить файл можно только снизив разрешение или качество."
+          title={t('job.tightTitle')}
         >
-          уже сильно сжат
+          {t('job.tight')}
         </span>
       )}
+    </div>
+  );
+}
+
+/** Переключатель языка интерфейса RU / EN. */
+function LangSwitch() {
+  const lang = useLang();
+  return (
+    <div className="lang-switch" role="group" aria-label={t('app.language')}>
+      {(['ru', 'en'] as Lang[]).map((l) => (
+        <button key={l} className={l === lang ? 'active' : ''} aria-pressed={l === lang} onClick={() => setLang(l)}>
+          {l.toUpperCase()}
+        </button>
+      ))}
     </div>
   );
 }

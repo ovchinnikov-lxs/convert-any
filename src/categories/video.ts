@@ -1,7 +1,9 @@
 import type { BuildContext, Category, Options } from './types';
 
+/** Форматы «только звук» — для них видео-настройки скрыты. */
 const AUDIO_ONLY = ['mp3', 'm4a', 'ogg', 'wav'];
 
+/** Разбирает время «90», «1:30», «1:02:03» или «12,5» в секунды. */
 export function parseTime(v: unknown): number | null {
   const s = String(v ?? '').trim().replace(',', '.');
   if (!s) return null;
@@ -10,6 +12,7 @@ export function parseTime(v: unknown): number | null {
   return parts.reduce((acc, n) => acc * 60 + n, 0);
 }
 
+/** Фильтры кадра: частота кадров и размер. */
 function videoFilters(format: string, o: Options): string[] {
   const filters: string[] = [];
   const fps = Number(o.fps) || 0;
@@ -19,7 +22,7 @@ function videoFilters(format: string, o: Options): string[] {
     const w = Number(o.gifWidth) || 480;
     filters.push(`scale='min(iw,${w})':-2:flags=lanczos`);
   } else if (height) {
-    // Only downscale; keep dimensions even for yuv420p.
+    // Только уменьшение; стороны чётные — этого требует yuv420p.
     filters.push(`scale=-2:'min(ih,${height})':flags=bicubic`);
   } else {
     filters.push('scale=trunc(iw/2)*2:trunc(ih/2)*2');
@@ -27,11 +30,12 @@ function videoFilters(format: string, o: Options): string[] {
   return filters;
 }
 
-/** Maps 1..100 quality to an encoder CRF range (higher quality → lower CRF). */
+/** Переводит качество 1..100 в диапазон CRF кодека (выше качество → меньше CRF). */
 function crf(quality: number, best: number, worst: number) {
   return String(Math.round(worst - ((quality - 1) / 99) * (worst - best)));
 }
 
+/** Битрейт видео для режима «до размера файла», кбит/с. */
 function targetBitrate(ctx: BuildContext): number | null {
   const { options, duration } = ctx;
   if (options.mode !== 'size' || !duration) return null;
@@ -39,14 +43,14 @@ function targetBitrate(ctx: BuildContext): number | null {
   const totalKbits = (Number(options.targetMB) || 10) * 8 * 1024 * 0.93;
   const audioKbps = options.removeAudio ? 0 : audioKbit(ctx);
   const kbps = Math.max(50, Math.floor(totalKbits / effective - audioKbps));
-  // A target above the source's size would only inflate the file.
+  // Цель больше исходника только раздула бы файл.
   const cap = videoCap(ctx);
   return cap ? Math.min(kbps, cap) : kbps;
 }
 
 /**
- * Audio bitrate: the chosen one, but never above the source's — re-encoding
- * 64 kbit/s audio at 128 only makes the file bigger.
+ * Битрейт звука: выбранный, но не выше исходного — перекодировать звук
+ * 64 кбит/с в 128 значит просто увеличить файл.
  */
 function audioKbit(ctx: BuildContext): number {
   const chosen = Number(ctx.options.audioBitrate) || 128;
@@ -55,20 +59,22 @@ function audioKbit(ctx: BuildContext): number {
 }
 
 /**
- * Upper bound for video bitrate in quality mode: a bit below the source's own,
- * so re-encoding never makes a file bigger.
+ * Потолок битрейта видео в режиме «по качеству»: чуть ниже исходного,
+ * чтобы перекодирование никогда не увеличивало файл.
  */
 function videoCap(ctx: BuildContext): number | null {
   const v = ctx.media?.vbitrate;
   return v && v > 50 ? Math.round(v * 0.9) : null;
 }
 
+/** Длительность фрагмента с учётом обрезки. */
 function clipDuration(o: Options, duration: number) {
   const start = parseTime(o.start) ?? 0;
   const end = parseTime(o.end) ?? duration;
   return Math.max(0.1, Math.min(end, duration) - start);
 }
 
+/** Пресеты скорости кодирования для x264 и libvpx. */
 const speedPresets: Record<string, { x264: string; vpx: string }> = {
   fast: { x264: 'ultrafast', vpx: '8' },
   balanced: { x264: 'veryfast', vpx: '5' },
@@ -77,23 +83,23 @@ const speedPresets: Record<string, { x264: string; vpx: string }> = {
 
 export const videoCategory: Category = {
   id: 'video',
-  title: 'Видео',
+  title: 'cat.video.title',
   icon: '🎬',
-  description: 'MP4, WebM, MOV, MKV, AVI, GIF, извлечение звука — сжатие, обрезка, смена разрешения',
+  description: 'cat.video.desc',
   status: 'ready',
   accept: 'video/*,.mkv,.mov,.avi,.flv,.wmv,.m4v,.3gp,.ts,.mts',
   needsDuration: true,
   formats: [
-    { id: 'mp4', label: 'MP4', ext: 'mp4', mime: 'video/mp4', hint: 'H.264 + AAC, открывается везде' },
-    { id: 'webm', label: 'WebM', ext: 'webm', mime: 'video/webm', hint: 'VP8 + Opus, для веба (кодируется медленнее MP4)' },
-    { id: 'mov', label: 'MOV', ext: 'mov', mime: 'video/quicktime', hint: 'H.264 + AAC' },
-    { id: 'mkv', label: 'MKV', ext: 'mkv', mime: 'video/x-matroska', hint: 'H.264 + AAC' },
-    { id: 'avi', label: 'AVI', ext: 'avi', mime: 'video/x-msvideo', hint: 'MPEG-4 + MP3' },
-    { id: 'gif', label: 'GIF', ext: 'gif', mime: 'image/gif', hint: 'Анимация без звука' },
-    { id: 'mp3', label: 'MP3', ext: 'mp3', mime: 'audio/mpeg', hint: 'Только звук' },
-    { id: 'm4a', label: 'M4A', ext: 'm4a', mime: 'audio/mp4', hint: 'Только звук (AAC)' },
-    { id: 'ogg', label: 'OGG', ext: 'ogg', mime: 'audio/ogg', hint: 'Только звук (Opus)' },
-    { id: 'wav', label: 'WAV', ext: 'wav', mime: 'audio/wav', hint: 'Только звук, без сжатия' },
+    { id: 'mp4', label: 'MP4', ext: 'mp4', mime: 'video/mp4', hint: 'hint.mp4' },
+    { id: 'webm', label: 'WebM', ext: 'webm', mime: 'video/webm', hint: 'hint.webm' },
+    { id: 'mov', label: 'MOV', ext: 'mov', mime: 'video/quicktime' },
+    { id: 'mkv', label: 'MKV', ext: 'mkv', mime: 'video/x-matroska' },
+    { id: 'avi', label: 'AVI', ext: 'avi', mime: 'video/x-msvideo' },
+    { id: 'gif', label: 'GIF', ext: 'gif', mime: 'image/gif', hint: 'hint.vgif' },
+    { id: 'mp3', label: 'MP3', ext: 'mp3', mime: 'audio/mpeg', hint: 'hint.mp3' },
+    { id: 'm4a', label: 'M4A', ext: 'm4a', mime: 'audio/mp4', hint: 'hint.m4a' },
+    { id: 'ogg', label: 'OGG', ext: 'ogg', mime: 'audio/ogg', hint: 'hint.ogg' },
+    { id: 'wav', label: 'WAV', ext: 'wav', mime: 'audio/wav', hint: 'hint.wav' },
   ],
   defaultFormat: 'mp4',
   defaultOptions: {
@@ -116,39 +122,39 @@ export const videoCategory: Category = {
     {
       key: 'mode',
       type: 'select',
-      label: 'Режим сжатия',
+      label: 'opt.mode',
       choices: [
-        { value: 'quality', label: 'По качеству' },
-        { value: 'size', label: 'До размера файла' },
+        { value: 'quality', label: 'opt.mode.quality' },
+        { value: 'size', label: 'opt.mode.size' },
       ],
       visible: (_o, f) => !AUDIO_ONLY.includes(f) && f !== 'gif',
     },
     {
       key: 'quality',
       type: 'slider',
-      label: 'Качество',
+      label: 'opt.quality',
       min: 1,
       max: 100,
       unit: '%',
-      hint: 'Меньше — легче файл',
+      hint: 'opt.quality.hint',
       visible: (o, f) => !AUDIO_ONLY.includes(f) && f !== 'gif' && o.mode !== 'size',
     },
     {
       key: 'targetMB',
       type: 'number',
-      label: 'Целевой размер',
+      label: 'opt.target',
       min: 0.1,
       step: 0.5,
-      unit: 'МБ',
-      hint: 'Битрейт подбирается автоматически',
+      unit: 'unit.MB',
+      hint: 'opt.target.hint',
       visible: (o, f) => !AUDIO_ONLY.includes(f) && f !== 'gif' && o.mode === 'size',
     },
     {
       key: 'resolution',
       type: 'select',
-      label: 'Разрешение',
+      label: 'opt.res',
       choices: [
-        { value: '0', label: 'Оригинальное' },
+        { value: '0', label: 'opt.res.orig' },
         { value: '2160', label: '4K (2160p)' },
         { value: '1440', label: '1440p' },
         { value: '1080', label: '1080p' },
@@ -157,13 +163,13 @@ export const videoCategory: Category = {
         { value: '360', label: '360p' },
         { value: '240', label: '240p' },
       ],
-      hint: 'Видео только уменьшается, не растягивается',
+      hint: 'opt.res.hint',
       visible: (_o, f) => !AUDIO_ONLY.includes(f) && f !== 'gif',
     },
     {
       key: 'gifWidth',
       type: 'slider',
-      label: 'Ширина GIF',
+      label: 'opt.gifWidth',
       min: 120,
       max: 1280,
       step: 20,
@@ -173,9 +179,9 @@ export const videoCategory: Category = {
     {
       key: 'fps',
       type: 'select',
-      label: 'Кадров в секунду',
+      label: 'opt.fps',
       choices: [
-        { value: '0', label: 'Как в оригинале' },
+        { value: '0', label: 'opt.fps.orig' },
         { value: '60', label: '60' },
         { value: '30', label: '30' },
         { value: '24', label: '24' },
@@ -188,33 +194,33 @@ export const videoCategory: Category = {
     {
       key: 'speed',
       type: 'select',
-      label: 'Скорость кодирования',
+      label: 'opt.speed',
       choices: [
-        { value: 'fast', label: 'Быстро (файл больше)' },
-        { value: 'balanced', label: 'Сбалансировано' },
-        { value: 'small', label: 'Медленно (файл меньше)' },
+        { value: 'fast', label: 'opt.speed.fast' },
+        { value: 'balanced', label: 'opt.speed.balanced' },
+        { value: 'small', label: 'opt.speed.small' },
       ],
       visible: (_o, f) => ['mp4', 'webm', 'mov', 'mkv'].includes(f),
     },
-    { key: 'start', type: 'text', label: 'Начало', placeholder: '0:00', hint: 'Секунды или мм:сс' },
-    { key: 'end', type: 'text', label: 'Конец', placeholder: 'до конца' },
+    { key: 'start', type: 'text', label: 'opt.start', placeholder: '0:00', hint: 'opt.start.hint' },
+    { key: 'end', type: 'text', label: 'opt.end', placeholder: 'opt.end.ph' },
     {
       key: 'removeAudio',
       type: 'checkbox',
-      label: 'Убрать звук',
+      label: 'opt.mute',
       visible: (_o, f) => !AUDIO_ONLY.includes(f) && f !== 'gif',
     },
     {
       key: 'audioBitrate',
       type: 'select',
-      label: 'Битрейт звука',
+      label: 'opt.abitrate',
       choices: [
-        { value: '64', label: '64 кбит/с' },
-        { value: '96', label: '96 кбит/с' },
-        { value: '128', label: '128 кбит/с' },
-        { value: '192', label: '192 кбит/с' },
-        { value: '256', label: '256 кбит/с' },
-        { value: '320', label: '320 кбит/с' },
+        { value: '64', label: 'unit.kbpsN', params: { n: 64 } },
+        { value: '96', label: 'unit.kbpsN', params: { n: 96 } },
+        { value: '128', label: 'unit.kbpsN', params: { n: 128 } },
+        { value: '192', label: 'unit.kbpsN', params: { n: 192 } },
+        { value: '256', label: 'unit.kbpsN', params: { n: 256 } },
+        { value: '320', label: 'unit.kbpsN', params: { n: 320 } },
       ],
       visible: (o, f) => f !== 'gif' && f !== 'wav' && !o.removeAudio,
     },
@@ -260,10 +266,10 @@ export const videoCategory: Category = {
 
     switch (format.id) {
       case 'webm':
-        // VP8: libvpx-vp9 crashes in the current single-threaded ffmpeg.wasm build.
+        // VP8: libvpx-vp9 в текущей сборке ffmpeg.wasm падает.
         args.push('-c:v', 'libvpx', '-deadline', 'good', '-cpu-used', speed.vpx, '-auto-alt-ref', '0');
         if (kbps) args.push('-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`);
-        // In libvpx, CRF only works together with a bitrate cap.
+        // В libvpx CRF работает только вместе с потолком битрейта.
         else args.push('-crf', crf(q, 6, 60), '-b:v', `${Math.min(20000, videoCap(ctx) ?? 20000)}k`);
         args.push('-pix_fmt', 'yuv420p');
         if (!o.removeAudio) args.push('-c:a', 'libopus', '-b:a', ab);
@@ -279,7 +285,7 @@ export const videoCategory: Category = {
         if (kbps) args.push('-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`);
         else {
           args.push('-crf', crf(q, 18, 38));
-          // Capped CRF: the result never needs more bits than the source had.
+          // CRF с потолком: результату не нужно больше бит, чем было у исходника.
           const cap = videoCap(ctx);
           if (cap) args.push('-maxrate', `${cap}k`, '-bufsize', `${cap}k`);
         }

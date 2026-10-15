@@ -1,18 +1,23 @@
+import { LocalizedError, t as tr } from '../i18n';
 import { baseName } from '../lib/utils';
 import type { Category, ConvertContext, ConvertOutput, Options } from './types';
 
+// Группы входных расширений.
 const TEXT = ['md', 'markdown', 'txt', 'html', 'htm'];
 const SHEETS = ['xlsx', 'xls', 'ods', 'csv', 'json'];
 const IMAGES = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
 const HTML_SOURCES = ['docx', ...TEXT, 'xlsx', 'xls', 'ods', 'csv'];
 
+/** Есть ли среди добавленных файлов хоть один из перечисленных типов. */
 const has = (inputs: Set<string>, list: string[]) => list.some((e) => inputs.has(e));
 
+/** Расширение файла строчными буквами, без точки. */
 export function extOf(name: string) {
   const i = name.lastIndexOf('.');
   return i > 0 ? name.slice(i + 1).toLowerCase() : '';
 }
 
+/** Упаковывает несколько результатов в один ZIP. */
 async function zip(files: { name: string; data: Blob | string }[], name: string): Promise<ConvertOutput> {
   const { zipSync, strToU8 } = await import('fflate');
   const entries: Record<string, Uint8Array> = {};
@@ -25,7 +30,7 @@ async function zip(files: { name: string; data: Blob | string }[], name: string)
 const pdfBlob = (bytes: Uint8Array) => new Blob([bytes as BlobPart], { type: 'application/pdf' });
 const textBlob = (text: string, mime: string) => new Blob([text], { type: `${mime};charset=utf-8` });
 
-/** Loads any text-like / office input as HTML. */
+/** Читает любой текстовый или офисный файл как HTML — общий промежуточный формат. */
 async function toHtml(file: File, ext: string, o: Options): Promise<string> {
   const t = await import('../lib/docs/text');
   if (ext === 'docx') return t.docxToHtml(file);
@@ -36,9 +41,10 @@ async function toHtml(file: File, ext: string, o: Options): Promise<string> {
     const s = await import('../lib/docs/sheets');
     return s.workbookToHtml(await s.readWorkbook(file, ext), Boolean(o.allSheets));
   }
-  throw new Error(`Формат .${ext} не поддерживается`);
+  throw new LocalizedError('err.unsupported', { ext });
 }
 
+/** Конвертация документа: выбирает нужную цепочку по входному расширению и целевому формату. */
 async function convert({ file, format, options: o, onProgress }: ConvertContext): Promise<ConvertOutput> {
   const ext = extOf(file.name);
   const base = baseName(file.name);
@@ -99,7 +105,7 @@ async function convert({ file, format, options: o, onProgress }: ConvertContext)
     case 'md': {
       const t = await import('../lib/docs/text');
       if (ext === 'pdf') {
-        // No structure in PDF text; keep paragraphs as Markdown paragraphs.
+        // В тексте PDF нет структуры — абзацы остаются абзацами Markdown.
         const text = await (await import('../lib/docs/pdf')).pdfToText(file, pages, onProgress);
         return out(textBlob(text.replace(/\f/g, '---'), 'text/markdown'));
       }
@@ -138,32 +144,33 @@ async function convert({ file, format, options: o, onProgress }: ConvertContext)
       return out(textBlob(await s.workbookToJson(await s.readWorkbook(file, ext), Boolean(o.allSheets)), 'application/json'));
     }
   }
-  throw new Error(`Нет конвертера .${ext} → ${format.label}`);
+  throw new LocalizedError('err.noConverter', { ext, format: format.label });
 }
 
+// Условия видимости настроек.
 const isPdfOp = (f: string, i: Set<string>) => f === 'pdf' && i.has('pdf');
 const makesPdfFromOther = (f: string, i: Set<string>) => f === 'pdf' && [...i].some((e) => e !== 'pdf');
 const fromPdfPages = (f: string, i: Set<string>) => i.has('pdf') && ['pdf', 'png', 'jpg', 'txt', 'md'].includes(f);
 
 export const documentCategory: Category = {
   id: 'docs',
-  title: 'Документы',
+  title: 'cat.docs.title',
   icon: '📄',
-  description: 'PDF, DOCX, Markdown, HTML, TXT, таблицы XLSX/ODS/CSV — конвертация, сжатие и объединение PDF',
+  description: 'cat.docs.desc',
   status: 'ready',
   accept: [...new Set(['pdf', 'docx', ...TEXT, ...SHEETS, ...IMAGES])].map((e) => `.${e}`).join(','),
   formats: [
-    { id: 'pdf', label: 'PDF', ext: 'pdf', mime: 'application/pdf', hint: 'Из документов, таблиц и картинок; сжатие и объединение PDF', from: ['pdf', 'docx', ...TEXT, 'xlsx', 'xls', 'ods', 'csv', ...IMAGES] },
-    { id: 'docx', label: 'DOCX', ext: 'docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', hint: 'Word из Markdown, HTML или текста', from: TEXT },
-    { id: 'md', label: 'Markdown', ext: 'md', mime: 'text/markdown', hint: 'Разметка из Word, HTML или PDF', from: ['docx', 'html', 'htm', 'pdf'] },
-    { id: 'html', label: 'HTML', ext: 'html', mime: 'text/html', hint: 'Веб-страница', from: HTML_SOURCES.filter((e) => e !== 'html' && e !== 'htm') },
-    { id: 'txt', label: 'TXT', ext: 'txt', mime: 'text/plain', hint: 'Только текст', from: ['pdf', 'docx', 'md', 'markdown', 'html', 'htm', 'xlsx', 'xls', 'ods', 'csv'] },
-    { id: 'png', label: 'PNG', ext: 'png', mime: 'image/png', hint: 'Страницы PDF картинками (несколько — в ZIP)', from: ['pdf'] },
-    { id: 'jpg', label: 'JPG', ext: 'jpg', mime: 'image/jpeg', hint: 'Страницы PDF картинками (несколько — в ZIP)', from: ['pdf'] },
-    { id: 'xlsx', label: 'XLSX', ext: 'xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', hint: 'Таблица Excel', from: ['xls', 'ods', 'csv', 'json'] },
-    { id: 'ods', label: 'ODS', ext: 'ods', mime: 'application/vnd.oasis.opendocument.spreadsheet', hint: 'Таблица LibreOffice', from: ['xlsx', 'xls', 'csv', 'json'] },
-    { id: 'csv', label: 'CSV', ext: 'csv', mime: 'text/csv', hint: 'Таблица текстом', from: ['xlsx', 'xls', 'ods', 'json'] },
-    { id: 'json', label: 'JSON', ext: 'json', mime: 'application/json', hint: 'Строки таблицы как объекты', from: ['xlsx', 'xls', 'ods', 'csv'] },
+    { id: 'pdf', label: 'PDF', ext: 'pdf', mime: 'application/pdf', hint: 'hint.dpdf', from: ['pdf', 'docx', ...TEXT, 'xlsx', 'xls', 'ods', 'csv', ...IMAGES] },
+    { id: 'docx', label: 'DOCX', ext: 'docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', hint: 'hint.ddocx', from: TEXT },
+    { id: 'md', label: 'Markdown', ext: 'md', mime: 'text/markdown', hint: 'hint.dmd', from: ['docx', 'html', 'htm', 'pdf'] },
+    { id: 'html', label: 'HTML', ext: 'html', mime: 'text/html', hint: 'hint.dhtml', from: HTML_SOURCES.filter((e) => e !== 'html' && e !== 'htm') },
+    { id: 'txt', label: 'TXT', ext: 'txt', mime: 'text/plain', hint: 'hint.dtxt', from: ['pdf', 'docx', 'md', 'markdown', 'html', 'htm', 'xlsx', 'xls', 'ods', 'csv'] },
+    { id: 'png', label: 'PNG', ext: 'png', mime: 'image/png', hint: 'hint.dpages', from: ['pdf'] },
+    { id: 'jpg', label: 'JPG', ext: 'jpg', mime: 'image/jpeg', hint: 'hint.dpages', from: ['pdf'] },
+    { id: 'xlsx', label: 'XLSX', ext: 'xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', hint: 'hint.dxlsx', from: ['xls', 'ods', 'csv', 'json'] },
+    { id: 'ods', label: 'ODS', ext: 'ods', mime: 'application/vnd.oasis.opendocument.spreadsheet', hint: 'hint.dods', from: ['xlsx', 'xls', 'csv', 'json'] },
+    { id: 'csv', label: 'CSV', ext: 'csv', mime: 'text/csv', hint: 'hint.dcsv', from: ['xlsx', 'xls', 'ods', 'json'] },
+    { id: 'json', label: 'JSON', ext: 'json', mime: 'application/json', hint: 'hint.djson', from: ['xlsx', 'xls', 'ods', 'csv'] },
   ],
   defaultFormat: 'pdf',
   defaultOptions: {
@@ -189,36 +196,36 @@ export const documentCategory: Category = {
     {
       key: 'pdfMode',
       type: 'select',
-      label: 'Что сделать с PDF',
+      label: 'opt.pdfMode',
       choices: [
-        { value: 'optimize', label: 'Пересохранить без потерь' },
-        { value: 'raster', label: 'Сильно сжать (страницы → JPEG)' },
+        { value: 'optimize', label: 'opt.pdfMode.optimize' },
+        { value: 'raster', label: 'opt.pdfMode.raster' },
       ],
-      hint: 'Сильное сжатие превращает текст в картинку — его нельзя будет выделить',
+      hint: 'opt.pdfMode.hint',
       visible: (_o, f, i) => isPdfOp(f, i),
     },
     {
       key: 'pages',
       type: 'text',
-      label: 'Страницы PDF',
-      placeholder: 'все, напр. 1-3, 5, 8-',
+      label: 'opt.pages',
+      placeholder: 'opt.pages.ph',
       visible: (_o, f, i) => fromPdfPages(f, i),
     },
     {
       key: 'dpi',
       type: 'slider',
-      label: 'Разрешение',
+      label: 'opt.dpi',
       min: 50,
       max: 300,
       step: 10,
       unit: ' dpi',
-      hint: '72 — экран, 150 — чтение, 300 — печать',
+      hint: 'opt.dpi.hint',
       visible: (o, f, i) => f === 'png' || f === 'jpg' || (isPdfOp(f, i) && o.pdfMode === 'raster'),
     },
     {
       key: 'quality',
       type: 'slider',
-      label: 'Качество JPEG',
+      label: 'opt.jpegQ',
       min: 10,
       max: 100,
       unit: '%',
@@ -227,52 +234,52 @@ export const documentCategory: Category = {
     {
       key: 'rotate',
       type: 'select',
-      label: 'Повернуть страницы',
+      label: 'opt.rotate',
       choices: [
-        { value: '0', label: 'Не поворачивать' },
-        { value: '90', label: 'На 90° по часовой' },
-        { value: '180', label: 'На 180°' },
-        { value: '270', label: 'На 90° против часовой' },
+        { value: '0', label: 'opt.rotate.0' },
+        { value: '90', label: 'opt.rotate.90' },
+        { value: '180', label: 'opt.rotate.180' },
+        { value: '270', label: 'opt.rotate.270' },
       ],
       visible: (_o, f, i) => isPdfOp(f, i),
     },
     {
       key: 'pageSize',
       type: 'select',
-      label: 'Размер страницы',
+      label: 'opt.pageSize',
       choices: [
         { value: 'a4', label: 'A4' },
         { value: 'a5', label: 'A5' },
         { value: 'letter', label: 'Letter' },
-        { value: 'fit', label: 'По размеру картинки' },
+        { value: 'fit', label: 'opt.pageSize.fit' },
       ],
-      hint: '«По размеру картинки» — только для изображений',
+      hint: 'opt.pageSize.hint',
       visible: (_o, f, i) => makesPdfFromOther(f, i),
     },
     {
       key: 'orientation',
       type: 'select',
-      label: 'Ориентация',
+      label: 'opt.orient',
       choices: [
-        { value: 'auto', label: 'Авто' },
-        { value: 'portrait', label: 'Книжная' },
-        { value: 'landscape', label: 'Альбомная' },
+        { value: 'auto', label: 'opt.orient.auto' },
+        { value: 'portrait', label: 'opt.orient.portrait' },
+        { value: 'landscape', label: 'opt.orient.landscape' },
       ],
       visible: (o, f, i) => makesPdfFromOther(f, i) && o.pageSize !== 'fit',
     },
     {
       key: 'margin',
       type: 'number',
-      label: 'Поля',
+      label: 'opt.margin',
       min: 0,
       max: 50,
-      unit: 'мм',
+      unit: 'unit.mm',
       visible: (_o, f, i) => makesPdfFromOther(f, i),
     },
     {
       key: 'fontSize',
       type: 'slider',
-      label: 'Размер шрифта',
+      label: 'opt.fontSize',
       min: 7,
       max: 18,
       unit: ' pt',
@@ -281,31 +288,31 @@ export const documentCategory: Category = {
     {
       key: 'allSheets',
       type: 'checkbox',
-      label: 'Все листы таблицы (иначе только первый)',
+      label: 'opt.allSheets',
       visible: (_o, f, i) => has(i, ['xlsx', 'xls', 'ods']) && !['xlsx', 'ods'].includes(f),
     },
     {
       key: 'delimiter',
       type: 'select',
-      label: 'Разделитель CSV',
+      label: 'opt.delim',
       choices: [
-        { value: ',', label: 'Запятая ,' },
-        { value: ';', label: 'Точка с запятой ; (Excel RU)' },
-        { value: 'tab', label: 'Табуляция' },
+        { value: ',', label: 'opt.delim.comma' },
+        { value: ';', label: 'opt.delim.semicolon' },
+        { value: 'tab', label: 'opt.delim.tab' },
       ],
       visible: (_o, f) => f === 'csv',
     },
     {
       key: 'bom',
       type: 'checkbox',
-      label: 'UTF-8 с BOM (для кириллицы в Excel)',
+      label: 'opt.bom',
       visible: (_o, f) => f === 'csv',
     },
     {
       key: 'merge',
       type: 'checkbox',
-      label: 'Объединить всё в один PDF',
-      hint: 'В порядке списка файлов',
+      label: 'opt.merge',
+      hint: 'opt.merge.hint',
       visible: (_o, f) => f === 'pdf',
     },
   ],
@@ -313,6 +320,6 @@ export const documentCategory: Category = {
   canMerge: (format, o) => format === 'pdf' && Boolean(o.merge),
   merge: async (outputs) => {
     const { mergePdfs } = await import('../lib/docs/pdf');
-    return { blob: pdfBlob(await mergePdfs(outputs.map((o) => o.blob))), name: 'объединённый.pdf' };
+    return { blob: pdfBlob(await mergePdfs(outputs.map((o) => o.blob))), name: `${tr('docs.mergedName')}.pdf` };
   },
 };

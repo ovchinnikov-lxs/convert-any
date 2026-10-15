@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Cross-origin isolation enables SharedArrayBuffer → multi-threaded ffmpeg.
+// Изоляция страницы (COOP/COEP) включает SharedArrayBuffer → многопоточный ffmpeg.
 const isolation = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -14,7 +14,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // The page asks before switching to a new version, so a running conversion isn't interrupted.
+      // Страница спрашивает перед переходом на новую версию — чтобы не прервать конвертацию.
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
@@ -33,9 +33,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // The whole app (incl. lazily loaded document libraries) is precached for offline use…
+        // Всё приложение (включая лениво загружаемые библиотеки документов) кэшируется для офлайна…
         globPatterns: ['**/*.{js,mjs,css,html,svg,png,ico,webmanifest}'],
-        // …except the ~31 MB ffmpeg cores: those are cached on first use (or via "Скачать для офлайна").
+        // …кроме ядер ffmpeg (~31 МБ): они кэшируются при первом использовании или по кнопке «Скачать для офлайна».
         globIgnores: ['ffmpeg/**'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
@@ -58,7 +58,7 @@ export default defineConfig({
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
   },
   build: {
-    // pdf.js, pdfmake and SheetJS are big but loaded lazily, only for documents.
+    // pdf.js, pdfmake и SheetJS большие, но грузятся лениво — только для документов.
     chunkSizeWarningLimit: 1500,
   },
   worker: {

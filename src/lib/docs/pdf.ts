@@ -1,5 +1,6 @@
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { LocalizedError } from '../../i18n';
 
 type OpenDoc = PDFDocumentProxy & { destroy: () => Promise<void> };
 
@@ -13,7 +14,7 @@ async function openWithPdfjs(file: Blob): Promise<OpenDoc> {
   return Object.assign(doc, { destroy: () => task.destroy() });
 }
 
-/** Parses "1-3, 5, 8-" into sorted 1-based page numbers. Empty = all pages. */
+/** Разбирает «1-3, 5, 8-» в отсортированные номера страниц (с 1). Пусто — все страницы. */
 export function parsePageRange(spec: string, count: number): number[] {
   const s = spec.trim();
   if (!s) return Array.from({ length: count }, (_, i) => i + 1);
@@ -28,10 +29,10 @@ export function parsePageRange(spec: string, count: number): number[] {
       const n = Number(part);
       if (n >= 1 && n <= count) pages.add(n);
     } else {
-      throw new Error(`Не понял диапазон страниц: «${part}»`);
+      throw new LocalizedError('err.pageRange', { part });
     }
   }
-  if (!pages.size) throw new Error(`В документе ${count} стр., диапазон «${spec}» пуст`);
+  if (!pages.size) throw new LocalizedError('err.pageRangeEmpty', { count, spec });
   return [...pages].sort((a, b) => a - b);
 }
 
@@ -42,7 +43,7 @@ async function renderPage(doc: PDFDocumentProxy, n: number, dpi: number): Promis
   canvas.width = Math.max(1, Math.round(viewport.width));
   canvas.height = Math.max(1, Math.round(viewport.height));
   const ctx = canvas.getContext('2d')!;
-  // White paper instead of transparent background.
+  // Белая бумага вместо прозрачного фона.
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvas, canvasContext: ctx, viewport }).promise;
@@ -52,7 +53,7 @@ async function renderPage(doc: PDFDocumentProxy, n: number, dpi: number): Promis
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Не удалось закодировать изображение'))), type, quality),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new LocalizedError('err.encodeImage'))), type, quality),
   );
 }
 
@@ -104,7 +105,7 @@ export async function pdfToText(file: Blob, pagesSpec: string, onProgress: Progr
   }
 }
 
-/** Strong compression: every page becomes a JPEG at the given DPI (text is no longer selectable). */
+/** Сильное сжатие: каждая страница становится JPEG с заданным DPI (текст больше не выделяется). */
 export async function pdfRasterize(
   file: Blob,
   opts: { dpi: number; quality: number; pages: string; rotate: number },
@@ -133,7 +134,7 @@ export async function pdfRasterize(
   }
 }
 
-/** Lossless: keeps selected pages, applies rotation, drops metadata, re-packs objects. */
+/** Без потерь: оставляет выбранные страницы, поворачивает, убирает метаданные, переупаковывает объекты. */
 export async function pdfRewrite(file: Blob, opts: { pages: string; rotate: number }): Promise<Uint8Array> {
   const { PDFDocument, degrees } = await import('pdf-lib');
   const src = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
@@ -166,7 +167,7 @@ const PAGE_SIZES: Record<string, [number, number]> = {
   letter: [612, 792],
 };
 
-/** Puts an image on a PDF page. JPEG/PNG are embedded as-is; other formats go through a canvas (lossless PNG). */
+/** Кладёт картинку на страницу PDF. JPEG/PNG встраиваются как есть, остальное — через canvas (PNG без потерь). */
 export async function imageToPdf(
   file: File,
   opts: { pageSize: string; orientation: string; margin: number },
@@ -194,7 +195,7 @@ export async function imageToPdf(
   let pageW: number;
   let pageH: number;
   if (opts.pageSize === 'fit') {
-    // Page exactly the image size (1px = 1pt), plus margins.
+    // Страница ровно по размеру картинки (1 px = 1 pt) плюс поля.
     pageW = img.width + marginPt * 2;
     pageH = img.height + marginPt * 2;
   } else {

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { t, useLang } from '../i18n';
 import { engineThreads } from '../lib/ffmpeg';
 
-/** True when the ffmpeg core for this browser is already in the service-worker cache. */
+/** Лежит ли ядро ffmpeg для этого браузера в кэше service worker. */
 async function engineCached(): Promise<boolean> {
   if (!('caches' in window)) return false;
   try {
@@ -29,14 +30,16 @@ function useOnline() {
 }
 
 interface Props {
-  /** Downloads (and thereby caches) the ffmpeg engine. */
+  /** Скачивает движок ffmpeg (и тем самым кладёт его в кэш). */
   onDownloadEngine: () => Promise<void>;
-  /** Changes whenever the engine finishes loading, to re-check the cache. */
+  /** Меняется, когда движок загрузился, — повод перепроверить кэш. */
   engineState: string;
   busy: boolean;
 }
 
+/** Плашка офлайн-режима в шапке и уведомление о новой версии сайта. */
 export function OfflineStatus({ onDownloadEngine, engineState, busy }: Props) {
+  useLang();
   const {
     offlineReady: [offlineReady],
     needRefresh: [needRefresh, setNeedRefresh],
@@ -62,13 +65,13 @@ export function OfflineStatus({ onDownloadEngine, engineState, busy }: Props) {
   const appReady = offlineReady || controlled;
   let pill;
   if (!online) {
-    pill = <span className="pill warn">Нет сети — работаем офлайн</span>;
+    pill = <span className="pill warn">{t('offline.noNet')}</span>;
   } else if (!appReady) {
-    pill = <span className="pill muted">Офлайн-режим готовится…</span>;
+    pill = <span className="pill muted">{t('offline.preparing')}</span>;
   } else if (cached) {
     pill = (
-      <span className="pill ok" title="Сайт и движок конвертации сохранены на устройстве — работает без интернета">
-        ✓ Работает офлайн
+      <span className="pill ok" title={t('offline.readyTitle')}>
+        {t('offline.ready')}
       </span>
     );
   } else {
@@ -76,7 +79,7 @@ export function OfflineStatus({ onDownloadEngine, engineState, busy }: Props) {
       <button
         className="pill action"
         disabled={downloading || busy}
-        title="Документы уже работают офлайн. Для фото и видео нужно один раз скачать движок ffmpeg."
+        title={t('offline.downloadTitle')}
         onClick={async () => {
           setDownloading(true);
           try {
@@ -87,7 +90,7 @@ export function OfflineStatus({ onDownloadEngine, engineState, busy }: Props) {
           }
         }}
       >
-        {downloading ? 'Скачиваю движок…' : '⬇ Скачать для офлайна (≈31 МБ)'}
+        {downloading ? t('offline.downloading') : t('offline.download')}
       </button>
     );
   }
@@ -97,11 +100,11 @@ export function OfflineStatus({ onDownloadEngine, engineState, busy }: Props) {
       {pill}
       {needRefresh && (
         <div className="update-toast" role="status">
-          <span>Доступна новая версия сайта</span>
+          <span>{t('offline.update')}</span>
           <button className="btn primary small" disabled={busy} onClick={() => updateServiceWorker(true)}>
-            {busy ? 'После конвертации' : 'Обновить'}
+            {busy ? t('offline.afterConvert') : t('offline.updateNow')}
           </button>
-          <button className="icon-btn" onClick={() => setNeedRefresh(false)} aria-label="Позже">
+          <button className="icon-btn" onClick={() => setNeedRefresh(false)} aria-label={t('offline.later')}>
             ✕
           </button>
         </div>

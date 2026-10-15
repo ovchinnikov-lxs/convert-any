@@ -1,30 +1,35 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as RPointerEvent, RefObject, WheelEvent as RWheelEvent } from 'react';
+import { t, useLang, type Key } from '../i18n';
 import { canPlayVideo, canShowImage, imageProxy, videoProxy } from '../lib/preview';
 import { formatBytes } from '../lib/utils';
 
+/** Что сравниваем: исходный файл и результат конвертации. */
 export interface CompareItem {
   kind: 'image' | 'video';
   original: File;
   result: Blob;
   resultUrl: string;
   resultName: string;
-  /** Seconds the result is shifted relative to the original (trim start). */
+  /** На сколько секунд результат сдвинут относительно оригинала (начало обрезки). */
   offset: number;
-  /** Frame rate of the result, used for frame stepping. */
+  /** Частота кадров результата — для покадрового шага. */
   fps: number;
 }
 
 type Mode = 'split' | 'toggle' | 'side';
 
+/** Сообщения храним ключом словаря, чтобы они переводились при смене языка. */
+type Message = { key: Key; params?: Record<string, string>; text?: string };
+
 type Prepared =
-  | { status: 'preparing'; message: string; progress?: number }
+  | { status: 'preparing'; message: Message; progress?: number }
   | { status: 'ready'; before: string; after: string }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: Message };
 
 interface Props {
   item: CompareItem;
-  /** False while the converter queue runs — proxies need the ffmpeg engine. */
+  /** false, пока идёт конвертация, — для превью нужен свободный движок ffmpeg. */
   engineFree: boolean;
   onClose: () => void;
 }
@@ -32,12 +37,14 @@ interface Props {
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 32;
 
+/** Полноэкранное сравнение «до/после»: шторка, переключение, рядом; зум; покадровое видео. */
 export function CompareViewer({ item, engineFree, onClose }: Props) {
-  const [prepared, setPrepared] = useState<Prepared>({ status: 'preparing', message: 'Подготовка…' });
+  useLang();
+  const [prepared, setPrepared] = useState<Prepared>({ status: 'preparing', message: { key: 'cmp.preparing' } });
   const [mode, setMode] = useState<Mode>('split');
   const [split, setSplit] = useState(50);
   const [showAfter, setShowAfter] = useState(true);
-  const [zoom, setZoom] = useState<number | null>(null); // null = fit
+  const [zoom, setZoom] = useState<number | null>(null); // null — «вписать»
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   const [dims, setDims] = useState<{ before?: string; after?: string }>({});
@@ -48,7 +55,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
   const beforeVideo = useRef<HTMLVideoElement>(null);
   const afterVideo = useRef<HTMLVideoElement>(null);
 
-  // --- Prepare displayable sources (proxy through ffmpeg when the browser can't show a format).
+  // --- Готовим источники для показа (через ffmpeg, если браузер не умеет показывать формат).
   useEffect(() => {
     let alive = true;
     const created: string[] = [];
@@ -60,39 +67,42 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
       const check = isVideo ? canPlayVideo : canShowImage;
       const [beforeOk, afterOk] = await Promise.all([
         check(originalUrl),
-        // A GIF made from a video can't be frame-synced as <img>, so it always goes through a proxy.
+        // GIF из видео не синхронизировать покадрово как <img>, поэтому он всегда идёт через превью.
         isVideo && item.result.type === 'image/gif' ? Promise.resolve(false) : check(item.resultUrl),
       ]);
       if ((!beforeOk || !afterOk) && !engineFreeAtOpen) {
         if (alive)
           setPrepared({
             status: 'error',
-            message: 'Браузер не умеет показывать этот формат напрямую. Дождитесь окончания конвертации и откройте сравнение снова.',
+            message: { key: 'cmp.unsupported' },
           });
         return;
       }
-      const make = async (ok: boolean, blob: Blob, url: string, name: string, label: string) => {
+      const make = async (ok: boolean, blob: Blob, url: string, name: string, label: Key) => {
         if (ok) return url;
-        if (alive) setPrepared({ status: 'preparing', message: `Готовлю превью: ${label}…`, progress: 0 });
+        const message: Message = { key: 'cmp.preparingPreview', params: { what: t(label) } };
+        if (alive) setPrepared({ status: 'preparing', message, progress: 0 });
         const proxied = isVideo
-          ? await videoProxy(blob, name, (p) => alive && setPrepared({ status: 'preparing', message: `Готовлю превью: ${label}…`, progress: p }))
+          ? await videoProxy(blob, name, (p) => alive && setPrepared({ status: 'preparing', message, progress: p }))
           : await imageProxy(blob, name);
         created.push(proxied);
         return proxied;
       };
-      const before = await make(beforeOk, item.original, originalUrl, item.original.name, 'оригинал');
-      const after = await make(afterOk, item.result, item.resultUrl, item.resultName, 'результат');
+      const before = await make(beforeOk, item.original, originalUrl, item.original.name, 'cmp.original');
+      const after = await make(afterOk, item.result, item.resultUrl, item.resultName, 'cmp.result');
       if (alive) setPrepared({ status: 'ready', before, after });
-    })().catch((e: Error) => alive && setPrepared({ status: 'error', message: e.message || 'Не удалось подготовить превью' }));
+    })().catch(
+      (e: Error) => alive && setPrepared({ status: 'error', message: { key: 'cmp.prepError', text: e.message } }),
+    );
 
     return () => {
       alive = false;
-      // Delay so media elements release the URLs first.
+      // С задержкой — чтобы медиа-элементы сначала отпустили ссылки.
       setTimeout(() => created.forEach((u) => URL.revokeObjectURL(u)), 0);
     };
   }, [item, engineFreeAtOpen]);
 
-  // --- Viewport size.
+  // --- Размер области просмотра.
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -138,7 +148,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     setPan({ x: 0, y: 0 });
   };
 
-  // --- Pointer: pan with drag, divider with its handle, zoom with wheel.
+  // --- Указатель: перетаскивание — сдвиг, ручка — шторка, колесо — зум.
   const drag = useRef<{ kind: 'pan' | 'split'; x: number; y: number; px: number; py: number } | null>(null);
 
   const paneOrigin = (clientX: number) => {
@@ -152,7 +162,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     zoomAt(scale * Math.exp(-e.deltaY * 0.0015), e.clientX - left, e.clientY - top);
   };
 
-  // Active touch points for pinch-zoom.
+  // Активные касания для зума двумя пальцами.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; scale: number } | null>(null);
 
@@ -197,7 +207,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     drag.current = null;
   };
 
-  // Block page scroll while the wheel zooms.
+  // Колесо зумирует, а не прокручивает страницу.
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -206,7 +216,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     return () => el.removeEventListener('wheel', stop);
   }, [prepared.status]);
 
-  // --- Video sync.
+  // --- Синхронизация видео.
   const video = useVideoSync(item, beforeVideo, afterVideo, prepared.status === 'ready');
 
   const flip = useCallback(() => {
@@ -214,7 +224,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     setShowAfter((v) => !v);
   }, []);
 
-  // --- Keyboard.
+  // --- Клавиатура.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'SELECT') return;
@@ -224,6 +234,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
           break;
         case 's':
         case 'S':
+        // «ы» — та же клавиша S в русской раскладке.
         case 'ы':
         case 'Ы':
           flip();
@@ -272,7 +283,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     const style = transformFor() ?? { visibility: 'hidden' as const };
     const report = (w: number, h: number) => {
       setDims((d) => ({ ...d, [which]: `${w}×${h}` }));
-      // The original defines the canvas; the result is stretched over it to line up pixels.
+      // Холст задаёт оригинал; результат растягивается поверх, чтобы пиксели совпали.
       if (which === 'before') setBox({ w, h });
     };
     if (item.kind === 'video') {
@@ -313,25 +324,25 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
   const zoomLabel = `${Math.round(scale * 100)}%`;
 
   return (
-    <div className="cmp-overlay" role="dialog" aria-modal="true" aria-label="Сравнение до и после">
+    <div className="cmp-overlay" role="dialog" aria-modal="true" aria-label={t('cmp.dialog')}>
       <div className="cmp-top">
         <div className="cmp-title" title={item.original.name}>
           {item.original.name}
         </div>
-        <div className="seg" role="tablist" aria-label="Режим сравнения">
+        <div className="seg" role="tablist" aria-label={t('cmp.modes')}>
           {(
             [
-              ['split', 'Шторка'],
-              ['toggle', 'Переключение'],
-              ['side', 'Рядом'],
+              ['split', 'cmp.split'],
+              ['toggle', 'cmp.toggle'],
+              ['side', 'cmp.side'],
             ] as const
           ).map(([m, label]) => (
             <button key={m} className={mode === m ? 'active' : ''} onClick={() => setMode(m)}>
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
-        <button className="icon-btn cmp-close" onClick={onClose} aria-label="Закрыть">
+        <button className="icon-btn cmp-close" onClick={onClose} aria-label={t('cmp.close')}>
           ✕
         </button>
       </div>
@@ -349,10 +360,10 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
         {prepared.status !== 'ready' ? (
           <div className="cmp-status">
             {prepared.status === 'error' ? (
-              <span className="cmp-error">{prepared.message}</span>
+              <span className="cmp-error">{messageText(prepared.message)}</span>
             ) : (
               <>
-                <span>{prepared.message}</span>
+                <span>{messageText(prepared.message)}</span>
                 {prepared.progress !== undefined && (
                   <div className="bar">
                     <div style={{ width: `${prepared.progress * 100}%` }} />
@@ -375,11 +386,11 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
               </div>
             )}
             {mode === 'toggle' ? (
-              <div className={`cmp-badge big ${showAfter ? 'after' : 'before'}`}>{showAfter ? 'После' : 'До'}</div>
+              <div className={`cmp-badge big ${showAfter ? 'after' : 'before'}`}>{showAfter ? t('cmp.after') : t('cmp.before')}</div>
             ) : (
               <>
-                <div className="cmp-badge left">До</div>
-                <div className="cmp-badge right">После</div>
+                <div className="cmp-badge left">{t('cmp.before')}</div>
+                <div className="cmp-badge right">{t('cmp.after')}</div>
               </>
             )}
           </>
@@ -391,27 +402,27 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
       <div className="cmp-bottom">
         <div className="cmp-info">
           <span>
-            <b>До:</b> {dims.before ?? '…'} · {formatBytes(item.original.size)}
+            <b>{t('cmp.before')}:</b> {dims.before ?? '…'} · {formatBytes(item.original.size)}
           </span>
           <span>
-            <b>После:</b> {dims.after ?? '…'} · {formatBytes(item.result.size)}
+            <b>{t('cmp.after')}:</b> {dims.after ?? '…'} · {formatBytes(item.result.size)}
           </span>
         </div>
         <div className="cmp-tools">
           {mode === 'toggle' && (
             <button className="btn ghost small" onClick={() => setShowAfter((v) => !v)}>
-              Показать {showAfter ? 'оригинал' : 'результат'} <kbd>S</kbd>
+              {showAfter ? t('cmp.showOriginal') : t('cmp.showResult')} <kbd>S</kbd>
             </button>
           )}
-          <button className="btn ghost small" onClick={() => zoomAt(scale / 1.5)} aria-label="Уменьшить">
+          <button className="btn ghost small" onClick={() => zoomAt(scale / 1.5)} aria-label={t('cmp.zoomOut')}>
             −
           </button>
           <span className="cmp-zoom">{zoomLabel}</span>
-          <button className="btn ghost small" onClick={() => zoomAt(scale * 1.5)} aria-label="Увеличить">
+          <button className="btn ghost small" onClick={() => zoomAt(scale * 1.5)} aria-label={t('cmp.zoomIn')}>
             +
           </button>
           <button className={`btn ghost small${zoom === null ? ' on' : ''}`} onClick={fit}>
-            Вписать
+            {t('cmp.fit')}
           </button>
           <button className={`btn ghost small${zoom === 1 ? ' on' : ''}`} onClick={() => zoomAt(1)}>
             1:1
@@ -421,21 +432,19 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
           </button>
         </div>
       </div>
-      <div className="cmp-hints">
-        Колесо — зум, перетаскивание — сдвиг, двойной клик — 1:1/вписать, <kbd>S</kbd> — до/после
-        {item.kind === 'video' ? (
-          <>
-            , <kbd>Пробел</kbd> — пауза, <kbd>←</kbd>/<kbd>→</kbd> — кадр (с <kbd>Shift</kbd> — 10 кадров)
-          </>
-        ) : (
-          <>
-            , <kbd>Пробел</kbd> — до/после
-          </>
-        )}
-        , <kbd>Esc</kbd> — закрыть
-      </div>
+      <div className="cmp-hints">{withKeys(t(item.kind === 'video' ? 'cmp.hintsVideo' : 'cmp.hintsImage'))}</div>
     </div>
   );
+}
+
+/** Текст сообщения на текущем языке (с подробностями ошибки, если есть). */
+function messageText(m: Message) {
+  return m.text ? `${t(m.key, m.params)}: ${m.text}` : t(m.key, m.params);
+}
+
+/** Превращает «[Esc]» в подсказке в изображение клавиши. */
+function withKeys(text: string) {
+  return text.split(/\[([^\]]+)\]/).map((part, i) => (i % 2 ? <kbd key={i}>{part}</kbd> : part));
 }
 
 // ---------------------------------------------------------------------------
@@ -452,7 +461,7 @@ interface VideoSync {
   onLoaded: () => void;
 }
 
-/** Keeps the original video locked to the result's timeline (shifted by the trim offset). */
+/** Держит оригинал на шкале времени результата (со сдвигом на начало обрезки). */
 function useVideoSync(
   item: CompareItem,
   beforeRef: RefObject<HTMLVideoElement | null>,
@@ -473,7 +482,7 @@ function useVideoSync(
     const wasPlaying = !a.paused;
     a.pause();
     b.pause();
-    // Re-align exactly: playback drifts slightly between the two elements.
+    // Точно выравниваем: при воспроизведении два элемента немного расходятся.
     if (wasPlaying) b.currentTime = a.currentTime + item.offset;
     setPlaying(false);
   }, [beforeRef, afterRef, item.offset]);
@@ -500,7 +509,7 @@ function useVideoSync(
       if (!a) return;
       const total = Math.max(1, Math.floor((a.duration || 0) * fps));
       const frame = Math.min(total - 1, Math.max(0, Math.floor(timeRef.current * fps + 1e-3) + frames));
-      // Mid-frame time avoids landing on a boundary where browsers may show the previous frame.
+      // Середина кадра: на границе браузер может показать предыдущий кадр.
       seek((frame + 0.5) / fps);
     },
     [afterRef, fps, seek],
@@ -532,7 +541,7 @@ function useVideoSync(
     const b = beforeRef.current;
     if (!a || !b || !a.duration || !b.duration) return;
     setDuration(a.duration);
-    // Show the first frame of both, aligned.
+    // Показываем первый кадр обоих, выровненный.
     seek(0.5 / fps);
   }, [afterRef, beforeRef, fps, seek]);
 
@@ -574,13 +583,13 @@ function VideoControls({ video, fps }: { video: VideoSync; fps: number }) {
   const total = Math.max(1, Math.floor(video.duration * f));
   return (
     <div className="cmp-video">
-      <button className="btn ghost small" onClick={() => video.step(-1)} aria-label="Предыдущий кадр" title="Предыдущий кадр (←)">
+      <button className="btn ghost small" onClick={() => video.step(-1)} aria-label={t('cmp.prevFrame')} title={t('cmp.prevFrame')}>
         ◀︎|
       </button>
-      <button className="btn primary small cmp-play" onClick={video.toggle} aria-label={video.playing ? 'Пауза' : 'Играть'}>
+      <button className="btn primary small cmp-play" onClick={video.toggle} aria-label={video.playing ? t('cmp.pause') : t('cmp.play')}>
         {video.playing ? '❚❚' : '▶'}
       </button>
-      <button className="btn ghost small" onClick={() => video.step(1)} aria-label="Следующий кадр" title="Следующий кадр (→)">
+      <button className="btn ghost small" onClick={() => video.step(1)} aria-label={t('cmp.nextFrame')} title={t('cmp.nextFrame')}>
         |▶︎
       </button>
       <input
@@ -591,12 +600,12 @@ function VideoControls({ video, fps }: { video: VideoSync; fps: number }) {
         step={1}
         value={Math.min(frame, total - 1)}
         onChange={(e) => video.seek((Number(e.target.value) + 0.5) / f)}
-        aria-label="Кадр"
+        aria-label={t('cmp.frame')}
       />
       <span className="cmp-time">
-        {fmtTime(video.time)} · кадр {Math.min(frame, total - 1) + 1}/{total}
+        {fmtTime(video.time)} · {t('cmp.frameN', { n: Math.min(frame, total - 1) + 1, total })}
       </span>
-      <select value={video.rate} onChange={(e) => video.setRate(Number(e.target.value))} aria-label="Скорость">
+      <select value={video.rate} onChange={(e) => video.setRate(Number(e.target.value))} aria-label={t('cmp.speed')}>
         {[0.1, 0.25, 0.5, 1, 2].map((r) => (
           <option key={r} value={r}>
             {r}×

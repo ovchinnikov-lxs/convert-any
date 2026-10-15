@@ -1,12 +1,16 @@
 import { useRef, useState } from 'react';
+import { t, useLang } from '../i18n';
 
 interface Props {
   accept: string;
   onFiles: (files: File[]) => void;
+  /** Компактный вид, когда файлы уже добавлены. */
   compact?: boolean;
 }
 
+/** Зона для перетаскивания файлов; по клику открывает выбор файлов. */
 export function Dropzone({ accept, onFiles, compact }: Props) {
+  useLang();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
 
@@ -41,8 +45,8 @@ export function Dropzone({ accept, onFiles, compact }: Props) {
       />
       <div className="dropzone-icon">⬆</div>
       <div>
-        <strong>{compact ? 'Добавить ещё файлы' : 'Перетащите файлы сюда'}</strong>
-        {!compact && <span> или нажмите, чтобы выбрать</span>}
+        <strong>{compact ? t('drop.more') : t('drop.title')}</strong>
+        {!compact && <span>{t('drop.or')}</span>}
       </div>
     </div>
   );

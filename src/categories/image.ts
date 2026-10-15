@@ -1,7 +1,9 @@
 import type { Category, Options } from './types';
 
+/** Форматы со сжатием с потерями — для них есть ползунок качества. */
 const lossyFormats = ['webp', 'jpg'];
 
+/** Фильтр ffmpeg для изменения размера по выбранному режиму (null — размер не меняется). */
 function scaleFilter(o: Options): string | null {
   const mode = o.resize as string;
   const w = Number(o.width) || 0;
@@ -16,7 +18,7 @@ function scaleFilter(o: Options): string | null {
       if (!w && !h) return null;
       const W = w || 100000;
       const H = h || 100000;
-      // Shrink only, keep aspect ratio.
+      // Только уменьшение, пропорции сохраняются.
       return `scale=w='min(iw,${W})':h='min(ih,${H})':force_original_aspect_ratio=decrease:flags=lanczos`;
     }
     case 'exact': {
@@ -30,19 +32,19 @@ function scaleFilter(o: Options): string | null {
 
 export const imageCategory: Category = {
   id: 'image',
-  title: 'Изображения',
+  title: 'cat.image.title',
   icon: '🖼️',
-  description: 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO — смена формата, сжатие, изменение размера',
+  description: 'cat.image.desc',
   status: 'ready',
   accept: 'image/*,.ico,.tif,.tiff,.bmp,.tga',
   formats: [
-    { id: 'webp', label: 'WebP', ext: 'webp', mime: 'image/webp', hint: 'Лёгкий формат для веба' },
-    { id: 'png', label: 'PNG', ext: 'png', mime: 'image/png', hint: 'Без потерь, с прозрачностью' },
-    { id: 'jpg', label: 'JPG', ext: 'jpg', mime: 'image/jpeg', hint: 'Фото, без прозрачности' },
-    { id: 'gif', label: 'GIF', ext: 'gif', mime: 'image/gif', hint: '256 цветов, анимация' },
+    { id: 'webp', label: 'WebP', ext: 'webp', mime: 'image/webp', hint: 'hint.webp' },
+    { id: 'png', label: 'PNG', ext: 'png', mime: 'image/png', hint: 'hint.png' },
+    { id: 'jpg', label: 'JPG', ext: 'jpg', mime: 'image/jpeg', hint: 'hint.jpg' },
+    { id: 'gif', label: 'GIF', ext: 'gif', mime: 'image/gif', hint: 'hint.gif' },
     { id: 'bmp', label: 'BMP', ext: 'bmp', mime: 'image/bmp' },
     { id: 'tiff', label: 'TIFF', ext: 'tiff', mime: 'image/tiff' },
-    { id: 'ico', label: 'ICO', ext: 'ico', mime: 'image/x-icon', hint: 'Иконка, максимум 256×256' },
+    { id: 'ico', label: 'ICO', ext: 'ico', mime: 'image/x-icon', hint: 'hint.ico' },
   ],
   defaultFormat: 'webp',
   defaultOptions: {
@@ -58,34 +60,34 @@ export const imageCategory: Category = {
     {
       key: 'quality',
       type: 'slider',
-      label: 'Качество',
+      label: 'opt.quality',
       min: 1,
       max: 100,
       unit: '%',
-      hint: 'Меньше — легче файл',
+      hint: 'opt.quality.hint',
       visible: (o, f) => lossyFormats.includes(f) && !(f === 'webp' && o.lossless),
     },
     {
       key: 'lossless',
       type: 'checkbox',
-      label: 'Без потерь (lossless)',
+      label: 'opt.lossless',
       visible: (_o, f) => f === 'webp',
     },
     {
       key: 'resize',
       type: 'select',
-      label: 'Размер',
+      label: 'opt.size',
       choices: [
-        { value: 'none', label: 'Оригинальный' },
-        { value: 'percent', label: 'В процентах' },
-        { value: 'fit', label: 'Вписать в рамку (только уменьшение)' },
-        { value: 'exact', label: 'Точный размер' },
+        { value: 'none', label: 'opt.size.none' },
+        { value: 'percent', label: 'opt.size.percent' },
+        { value: 'fit', label: 'opt.size.fit' },
+        { value: 'exact', label: 'opt.size.exact' },
       ],
     },
     {
       key: 'percent',
       type: 'slider',
-      label: 'Масштаб',
+      label: 'opt.scale',
       min: 5,
       max: 200,
       step: 5,
@@ -95,25 +97,25 @@ export const imageCategory: Category = {
     {
       key: 'width',
       type: 'number',
-      label: 'Ширина',
+      label: 'opt.width',
       min: 0,
       unit: 'px',
-      placeholder: 'авто',
+      placeholder: 'opt.auto',
       visible: (o) => o.resize === 'fit' || o.resize === 'exact',
     },
     {
       key: 'height',
       type: 'number',
-      label: 'Высота',
+      label: 'opt.height',
       min: 0,
       unit: 'px',
-      placeholder: 'авто',
+      placeholder: 'opt.auto',
       visible: (o) => o.resize === 'fit' || o.resize === 'exact',
     },
     {
       key: 'stripMetadata',
       type: 'checkbox',
-      label: 'Удалить метаданные (EXIF, GPS)',
+      label: 'opt.strip',
     },
   ],
   buildArgs: ({ input, format, options }) => {
@@ -130,7 +132,7 @@ export const imageCategory: Category = {
         else args.push('-quality', String(q), '-compression_level', '4');
         break;
       case 'jpg':
-        // Flatten transparency onto white; JPEG has no alpha.
+        // В JPEG нет прозрачности — подкладываем белый фон.
         filters.push(
           'format=rgba,split[fg][bg];[bg]drawbox=c=white@1:t=fill[w];[w][fg]overlay=format=auto,format=yuvj444p',
         );
@@ -159,7 +161,7 @@ export const imageCategory: Category = {
 
     if (filters.length) args.push('-vf', filters.join(','));
     if (options.stripMetadata) args.push('-map_metadata', '-1');
-    // Single-frame outputs: take only the first frame for formats without animation.
+    // Форматы без анимации: берём только первый кадр.
     if (['jpg', 'png', 'bmp', 'tiff', 'ico'].includes(format.id)) {
       args.push('-frames:v', '1', '-update', '1');
     }

@@ -1,6 +1,6 @@
 import { runFFmpeg } from './ffmpeg';
 
-/** Resolves true if the browser can show this image natively. */
+/** true, если браузер сам умеет показывать это изображение. */
 export function canShowImage(url: string): Promise<boolean> {
   const img = new Image();
   img.src = url;
@@ -10,7 +10,7 @@ export function canShowImage(url: string): Promise<boolean> {
   );
 }
 
-/** Resolves true if the browser can decode at least the first frame of this video. */
+/** true, если браузер может декодировать хотя бы первый кадр этого видео. */
 export function canPlayVideo(url: string): Promise<boolean> {
   return new Promise((resolve) => {
     const v = document.createElement('video');
@@ -33,7 +33,7 @@ function asFile(blob: Blob, name: string) {
   return blob instanceof File ? blob : new File([blob], name, { type: blob.type });
 }
 
-/** Lossless PNG copy of the first frame, for images the browser can't display (TIFF etc.). */
+/** PNG-копия первого кадра без потерь — для изображений, которые браузер не показывает (TIFF и т.п.). */
 export async function imageProxy(blob: Blob, name: string): Promise<string> {
   const { data } = await runFFmpeg({
     file: asFile(blob, name),
@@ -44,9 +44,9 @@ export async function imageProxy(blob: Blob, name: string): Promise<string> {
 }
 
 /**
- * Near-lossless copy for videos the browser can't play (AVI, some MKV, GIF…).
- * H.264 where supported, VP8 otherwise (e.g. Chromium/Firefox builds without H.264).
- * Very low quantizers keep the proxy's own artifacts far below what's being compared.
+ * Почти без потерь перекодированная копия для видео, которые браузер не играет (AVI, часть MKV, GIF…).
+ * H.264, где он поддерживается, иначе VP8 (например, Chromium/Firefox без H.264).
+ * Очень низкие квантизаторы — собственные артефакты превью намного меньше сравниваемых.
  */
 export async function videoProxy(
   blob: Blob,
