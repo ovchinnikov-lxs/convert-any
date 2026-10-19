@@ -5,7 +5,8 @@
 export const ru = {
   // --- Page
   'meta.title': 'Convert Any — конвертер файлов в браузере',
-  'meta.description': 'Конвертер изображений, видео и документов прямо в браузере. Файлы не покидают ваше устройство.',
+  'meta.description':
+    'Конвертер изображений, видео и документов прямо в браузере: HEIC с iPhone в JPG, PNG и WebP, сжатие видео, PDF. Файлы не покидают ваше устройство.',
   'app.subtitle': 'Конвертер файлов прямо в браузере',
   'app.privacy': '🔒 Файлы не покидают ваше устройство',
   'app.privacyTitle': 'Конвертация выполняется в вашем браузере (WebAssembly и JavaScript) — без загрузки на сервер',
@@ -42,6 +43,7 @@ export const ru = {
   'job.warnNotSmaller':
     'Файл почти не уменьшился: исходник уже хорошо сжат. Уменьшите разрешение или качество, либо задайте «До размера файла».',
   'job.tight': 'уже сильно сжат',
+  'job.heicTitle': 'Фото HEIC (iPhone) — декодируется прямо в браузере',
   'job.tightTitle': 'Битрейт исходника уже низкий. Заметно уменьшить файл можно только снизив разрешение или качество.',
 
   // --- Units
@@ -103,7 +105,8 @@ export const ru = {
 
   // --- Categories
   'cat.image.title': 'Изображения',
-  'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO — смена формата, сжатие, изменение размера',
+  'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO, HEIC — смена формата, сжатие, изменение размера',
+  'cat.image.note': 'Фото с iPhone (HEIC/HEIF) → JPG, PNG, WebP и другие форматы — в любом браузере',
   'cat.video.title': 'Видео',
   'cat.video.desc': 'MP4, WebM, MOV, MKV, AVI, GIF, извлечение звука — сжатие, обрезка, смена разрешения',
   'cat.docs.title': 'Документы',
@@ -215,6 +218,7 @@ export const ru = {
   'err.pageRangeEmpty': 'В документе {count} стр., диапазон «{spec}» пуст',
   'err.unsupported': 'Формат .{ext} не поддерживается',
   'err.noConverter': 'Нет конвертера .{ext} → {format}',
+  'err.heic': 'Не удалось прочитать HEIC: {detail}',
 } as const;
 
 export type Dict = { [K in keyof typeof ru]: string };

@@ -4,7 +4,8 @@ import type { Dict } from './ru';
 export const en: Dict = {
   // --- Page
   'meta.title': 'Convert Any — in-browser file converter',
-  'meta.description': 'Convert images, video and documents right in your browser. Your files never leave your device.',
+  'meta.description':
+    'Convert images, video and documents right in your browser: iPhone HEIC to JPG, PNG and WebP, video compression, PDF. Your files never leave your device.',
   'app.subtitle': 'File converter that runs in your browser',
   'app.privacy': '🔒 Files never leave your device',
   'app.privacyTitle': 'Conversion runs in your browser (WebAssembly and JavaScript) — nothing is uploaded',
@@ -41,6 +42,7 @@ export const en: Dict = {
   'job.warnNotSmaller':
     'The file barely got smaller: the source is already well compressed. Lower the resolution or quality, or use “Target file size”.',
   'job.tight': 'already compressed',
+  'job.heicTitle': 'HEIC photo (iPhone) — decoded right in your browser',
   'job.tightTitle': 'The source bitrate is already low. Only a lower resolution or quality will noticeably shrink it.',
 
   // --- Units
@@ -102,7 +104,8 @@ export const en: Dict = {
 
   // --- Categories
   'cat.image.title': 'Images',
-  'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO — change format, compress, resize',
+  'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO, HEIC — change format, compress, resize',
+  'cat.image.note': 'iPhone photos (HEIC/HEIF) → JPG, PNG, WebP and more — in any browser',
   'cat.video.title': 'Video',
   'cat.video.desc': 'MP4, WebM, MOV, MKV, AVI, GIF, audio extraction — compress, trim, change resolution',
   'cat.docs.title': 'Documents',
@@ -214,4 +217,5 @@ export const en: Dict = {
   'err.pageRangeEmpty': 'The document has {count} page(s), the range “{spec}” is empty',
   'err.unsupported': 'The .{ext} format is not supported',
   'err.noConverter': 'No converter for .{ext} → {format}',
+  'err.heic': 'Could not read the HEIC file: {detail}',
 };

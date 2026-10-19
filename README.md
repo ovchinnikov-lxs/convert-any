@@ -7,13 +7,20 @@ and used offline.
 
 Site: https://convert-any-one.vercel.app
 
+> 📱 **iPhone photos (HEIC/HEIF) → JPG, PNG, WebP, GIF and more — in any browser**, not just Safari.
+> The photo is decoded locally with libheif (WebAssembly); nothing is uploaded.
+
 ## Features
 
 ### Images
 - PNG, JPG, WebP, GIF, BMP, TIFF, ICO.
+- **HEIC / HEIF (iPhone photos) as input** → any of the formats above, with all the usual settings
+  (quality, resize, metadata removal). Works in every browser: the photo is decoded with libheif
+  compiled to WebAssembly. Rotation stored in the file is applied. HEIC is detected by content too,
+  so a HEIC file saved under a `.jpg` name still converts.
 - Quality, lossless WebP, resizing (percent / fit into a box / exact size).
 - Metadata removal (EXIF, GPS). Animated GIF → animated WebP.
-- Formats ffmpeg can't read (e.g. HEIC/AVIF in Safari) are decoded by the browser.
+- Other formats ffmpeg can't read (e.g. AVIF) fall back to the browser's own decoder.
 
 ### Video
 - MP4 (H.264), WebM (VP8), MOV, MKV, AVI, GIF and audio extraction (MP3, M4A, OGG, WAV).
@@ -24,7 +31,7 @@ Site: https://convert-any-one.vercel.app
 - Multi-threaded ffmpeg (≈2× faster) when the browser supports cross-origin isolation.
 
 ### Documents
-- DOCX / Markdown / HTML / TXT / spreadsheets / images → **PDF** with real, selectable text.
+- DOCX / Markdown / HTML / TXT / spreadsheets / images (incl. HEIC) → **PDF** with real, selectable text.
 - PDF → PNG / JPG (per page, several — in a ZIP), TXT, Markdown.
 - PDF → PDF: page selection, rotation, lossless or rasterizing (JPEG) compression.
 - Merging several files into one PDF.
@@ -50,6 +57,7 @@ src/
   components/            — drop zone, settings panel, comparison, offline status
   lib/
     ffmpeg.ts            — ffmpeg.wasm loading, task queue, media probing
+    heic.ts              — HEIC/HEIF detection and decoding (libheif via heic-to)
     preview.ts           — previews for formats the browser can't display
     docs/                — pdf.js, pdf-lib, pdfmake, mammoth, SheetJS
   i18n/                  — localization: ru.ts (main dictionary), en.ts
@@ -61,8 +69,9 @@ vercel.json              — COOP/COEP headers (multi-threading) and caching
   from our own origin. With cross-origin isolation (`Cross-Origin-Opener-Policy` /
   `Cross-Origin-Embedder-Policy` headers) the multi-threaded core is used, otherwise the
   single-threaded one; if the multi-threaded core fails, it falls back automatically.
-- **Document libraries** (pdf.js, pdfmake, SheetJS, …) are loaded on demand too, so the page
-  itself stays light.
+- **Document libraries** (pdf.js, pdfmake, SheetJS, …) and the **HEIC decoder** (~3 MB) are
+  loaded on demand too, so the page itself stays light. A HEIC file is decoded once, when it is
+  added: the PNG result feeds the thumbnail, the conversion and the before/after view.
 - A **service worker** (vite-plugin-pwa) caches the app for offline use; the ffmpeg core is
   cached on first use.
 
@@ -108,3 +117,5 @@ there is no multi-threaded ffmpeg (the site still works on the single-threaded c
 - PDF → DOCX is not supported (only server-side tools do it well). Complex DOCX layout
   (headers/footers, columns, text wrapping) is simplified when converting to PDF.
 - Scans without a text layer yield empty text (no OCR yet).
+- From multi-image HEIC files (bursts, Live Photos) only the main still image is converted;
+  HDR / 10-bit photos are converted to regular 8-bit color.

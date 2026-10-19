@@ -20,7 +20,8 @@ export default defineConfig({
       manifest: {
         name: 'Convert Any — file converter',
         short_name: 'Convert Any',
-        description: 'Convert images, video and documents right on your device — nothing is uploaded.',
+        description:
+          'Convert images (incl. iPhone HEIC), video and documents right on your device — nothing is uploaded.',
         lang: 'en',
         start_url: '/',
         display: 'standalone',

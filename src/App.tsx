@@ -9,6 +9,7 @@ import { OfflineStatus } from './components/OfflineStatus';
 import { OptionsPanel } from './components/OptionsPanel';
 import { LocalizedError, setLang, t, useLang, type Key, type Lang } from './i18n';
 import { isFFmpegLoaded, loadFFmpeg, runFFmpeg, cancelFFmpeg, probeMedia, type MediaInfo } from './lib/ffmpeg';
+import { heicToPng, isHeic } from './lib/heic';
 import { baseName, browserDecodeToPng, downloadBlob, formatBytes } from './lib/utils';
 
 type JobStatus = 'queued' | 'running' | 'done' | 'error';
@@ -31,6 +32,8 @@ interface Job {
     fps: number;
   };
   previewUrl?: string;
+  /** The source is a HEIC/HEIF photo (decoded to PNG before converting). */
+  heic?: boolean;
   /** A combined output (e.g. merged PDF), not a source file. */
   merged?: boolean;
   /** Probed source info (video). */
@@ -59,6 +62,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [compare, setCompare] = useState<CompareItem | null>(null);
   const cancelled = useRef(false);
+  /** HEIC sources decoded to PNG once, on add — reused for the thumbnail, conversion and comparison. */
+  const heicDecodes = useRef(new Map<number, Promise<File>>());
 
   const category = categories.find((c) => c.id === categoryId)!;
   const { format, options } = settings[categoryId];
@@ -97,9 +102,26 @@ export default function App() {
       file,
       status: 'queued',
       progress: 0,
-      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+      previewUrl:
+        file.type.startsWith('image/') && file.type !== 'image/heic' && file.type !== 'image/heif'
+          ? URL.createObjectURL(file)
+          : undefined,
     }));
     setJobs((js) => [...js, ...added]);
+    // HEIC (iPhone photos): browsers other than Safari can't read it, so decode it right away.
+    if (categoryId === 'image' || categoryId === 'docs') {
+      for (const job of added) {
+        void isHeic(job.file).then((heic) => {
+          if (!heic) return;
+          const decoded = heicToPng(job.file);
+          decoded.catch(() => {}); // the error is reported when the file is converted
+          heicDecodes.current.set(job.id, decoded);
+          if (job.previewUrl) URL.revokeObjectURL(job.previewUrl);
+          patchJob(job.id, { heic: true, previewUrl: undefined });
+          void decoded.then((png) => patchJob(job.id, { previewUrl: URL.createObjectURL(png) }));
+        });
+      }
+    }
     // Start fetching the engine in the background while the user picks settings.
     if (usesFFmpeg) {
       const engineReady = ensureEngine();
@@ -126,6 +148,7 @@ export default function App() {
       const job = js.find((j) => j.id === id);
       if (job?.previewUrl) URL.revokeObjectURL(job.previewUrl);
       if (job?.result) URL.revokeObjectURL(job.result.url);
+      heicDecodes.current.delete(id);
       return js.filter((j) => j.id !== id);
     });
   };
@@ -157,9 +180,11 @@ export default function App() {
       });
     }
     patchJob(job.id, { status: 'running', progress: 0, error: undefined });
+    // A HEIC source is converted from its decoded PNG (lossless); other files as they are.
+    const source = await sourceFor(job);
 
     if (cat.convert) {
-      const out = await cat.convert({ file: job.file, format: fmt, options: opts, onProgress: (p) => patchJob(job.id, { progress: p }) });
+      const out = await cat.convert({ file: source, format: fmt, options: opts, onProgress: (p) => patchJob(job.id, { progress: p }) });
       if (cancelled.current) throw new Error('cancelled');
       setResult(job, out.blob, out.name, fmt.label);
       return out;
@@ -180,10 +205,10 @@ export default function App() {
     let data: Uint8Array;
     let info: MediaInfo = {};
     try {
-      ({ data, info } = await run(job.file));
+      ({ data, info } = await run(source));
     } catch (err) {
-      // ffmpeg.wasm can't decode some image formats (AVIF, HEIC…) — let the browser decode them.
-      if (cat.id !== 'image' || cancelled.current) throw err;
+      // ffmpeg.wasm can't decode some image formats (e.g. AVIF) — let the browser decode them.
+      if (cat.id !== 'image' || cancelled.current || source !== job.file) throw err;
       const decoded = await browserDecodeToPng(job.file).catch(() => null);
       if (!decoded) throw err;
       ({ data } = await run(decoded).catch(() => Promise.reject(err)));
@@ -202,6 +227,15 @@ export default function App() {
       patchJob(job.id, { media: info.vcodec ? info : job.media, warning });
     }
     return { blob, name: outName };
+  };
+
+  /** The file to feed into the converter: the decoded PNG for HEIC, otherwise the original. */
+  const sourceFor = async (job: Job): Promise<File> => {
+    if (!heicDecodes.current.has(job.id) && (job.categoryId === 'image' || job.categoryId === 'docs')) {
+      // The file was added a moment ago and the HEIC check hasn't finished yet.
+      if (await isHeic(job.file)) heicDecodes.current.set(job.id, heicToPng(job.file));
+    }
+    return (await heicDecodes.current.get(job.id)) ?? job.file;
   };
 
   const setResult = (job: Job, blob: Blob, name: string, label: string, extra = { offset: 0, fps: 30 }) => {
@@ -325,6 +359,7 @@ export default function App() {
       <main className="layout">
         <section className="panel files-panel">
           <p className="cat-desc">{t(category.description)}</p>
+          {category.note && <p className="cat-note">{t(category.note)}</p>}
           <Dropzone accept={category.accept} onFiles={addFiles} compact={categoryJobs.length > 0} />
 
           {categoryJobs.length > 0 && (
@@ -336,11 +371,12 @@ export default function App() {
                   busy={busy}
                   onRemove={() => removeJob(job.id)}
                   onRetry={() => convertAll(job.id)}
-                  onCompare={() => {
+                  onCompare={async () => {
                     const r = job.result!;
                     setCompare({
                       kind: job.categoryId === 'video' ? 'video' : 'image',
                       original: job.file,
+                      originalDisplay: job.heic ? await heicDecodes.current.get(job.id)?.catch(() => undefined) : undefined,
                       result: r.blob,
                       resultUrl: r.url,
                       resultName: r.name,
@@ -424,7 +460,7 @@ export default function App() {
         <a href="https://ffmpegwasm.netlify.app/" target="_blank" rel="noreferrer">
           ffmpeg.wasm
         </a>
-        , pdf.js, pdf-lib, SheetJS {t('app.footerAnd')} mammoth. {t('app.footerLocal')}
+        , libheif, pdf.js, pdf-lib, SheetJS {t('app.footerAnd')} mammoth. {t('app.footerLocal')}
       </footer>
     </div>
   );
@@ -480,6 +516,11 @@ function JobRow({
       </div>
       <div className="job-main">
         <div className="job-name" title={job.file.name}>
+          {job.heic && (
+            <span className="tag-heic" title={t('job.heicTitle')}>
+              HEIC
+            </span>
+          )}
           {job.file.name}
         </div>
         <div className="job-meta">

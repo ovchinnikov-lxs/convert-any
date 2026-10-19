@@ -286,3 +286,14 @@ kbd {
   padding: 4px 9px; border-radius: 999px; cursor: pointer; letter-spacing: 0.04em;
 }
 .lang-switch button.active { background: var(--accent); color: #fff; }
+
+/* ---------- HEIC ---------- */
+.cat-note {
+  margin: -4px 0 12px; padding: 8px 12px; border-radius: 10px; font-size: 14px; font-weight: 500;
+  background: var(--accent-soft); color: var(--accent);
+}
+.cat-note::before { content: '📱 '; }
+.tag-heic {
+  display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 5px; vertical-align: 1px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.04em; background: var(--accent-soft); color: var(--accent);
+}

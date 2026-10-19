@@ -5,7 +5,8 @@ import type { Category, ConvertContext, ConvertOutput, Options } from './types';
 // Input extension groups.
 const TEXT = ['md', 'markdown', 'txt', 'html', 'htm'];
 const SHEETS = ['xlsx', 'xls', 'ods', 'csv', 'json'];
-const IMAGES = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'];
+// HEIC sources reach the converter already decoded to PNG (see App.sourceFor).
+const IMAGES = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif', 'hif'];
 const HTML_SOURCES = ['docx', ...TEXT, 'xlsx', 'xls', 'ods', 'csv'];
 
 /** Whether any of the added files has one of the listed types. */

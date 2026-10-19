@@ -35,8 +35,9 @@ export const imageCategory: Category = {
   title: 'cat.image.title',
   icon: '🖼️',
   description: 'cat.image.desc',
+  note: 'cat.image.note',
   status: 'ready',
-  accept: 'image/*,.ico,.tif,.tiff,.bmp,.tga',
+  accept: 'image/*,.heic,.heif,.hif,.ico,.tif,.tiff,.bmp,.tga',
   formats: [
     { id: 'webp', label: 'WebP', ext: 'webp', mime: 'image/webp', hint: 'hint.webp' },
     { id: 'png', label: 'PNG', ext: 'png', mime: 'image/png', hint: 'hint.png' },

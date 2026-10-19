@@ -8,6 +8,8 @@ import { formatBytes } from '../lib/utils';
 export interface CompareItem {
   kind: 'image' | 'video';
   original: File;
+  /** Displayable stand-in for the original (e.g. a HEIC photo decoded to PNG). */
+  originalDisplay?: Blob;
   result: Blob;
   resultUrl: string;
   resultName: string;
@@ -59,7 +61,8 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
   useEffect(() => {
     let alive = true;
     const created: string[] = [];
-    const originalUrl = URL.createObjectURL(item.original);
+    const originalShown = item.originalDisplay ?? item.original;
+    const originalUrl = URL.createObjectURL(originalShown);
     created.push(originalUrl);
 
     (async () => {
@@ -88,7 +91,7 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
         created.push(proxied);
         return proxied;
       };
-      const before = await make(beforeOk, item.original, originalUrl, item.original.name, 'cmp.original');
+      const before = await make(beforeOk, originalShown, originalUrl, item.original.name, 'cmp.original');
       const after = await make(afterOk, item.result, item.resultUrl, item.resultName, 'cmp.result');
       if (alive) setPrepared({ status: 'ready', before, after });
     })().catch(

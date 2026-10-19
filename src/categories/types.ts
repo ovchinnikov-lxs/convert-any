@@ -72,6 +72,8 @@ export interface Category {
   title: Key;
   icon: string;
   description: Key;
+  /** Highlighted line under the description (e.g. a feature people look for). */
+  note?: Key;
   status: 'ready' | 'soon';
   /** `accept` attribute for the file picker. */
   accept: string;
