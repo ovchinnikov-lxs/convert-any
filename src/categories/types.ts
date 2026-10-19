@@ -50,6 +50,8 @@ export interface BuildContext {
   duration?: number;
   /** Probed source info (codecs, bitrates), when known. */
   media?: MediaInfo;
+  /** Crop rectangle in source pixels (images), applied before any resizing. */
+  crop?: { x: number; y: number; w: number; h: number };
 }
 
 /** Everything a custom (non-ffmpeg) converter needs. */

@@ -19,6 +19,10 @@ Site: https://convert-any-one.vercel.app
   compiled to WebAssembly. Rotation stored in the file is applied. HEIC is detected by content too,
   so a HEIC file saved under a `.jpg` name still converts.
 - Quality, lossless WebP, resizing (percent / fit into a box / exact size).
+- **Cropping** per photo: drag a frame with handles like in an image editor (Shift keeps the
+  proportions), or type exact X / Y / width / height in pixels — the frame and the numbers stay in
+  sync. Aspect presets: free, original, 1:1, 4:3, 3:4, 3:2, 16:9, 9:16. Arrow keys nudge the frame.
+  The crop is applied before resizing and also shown in the before/after view.
 - Metadata removal (EXIF, GPS). Animated GIF → animated WebP.
 - Other formats ffmpeg can't read (e.g. AVIF) fall back to the browser's own decoder.
 
@@ -54,7 +58,7 @@ src/
     types.ts             — shared types: Category, FormatDef, FieldDef…
     image.ts, video.ts   — ffmpeg-based sections (build ffmpeg arguments)
     document.ts          — documents section (own JS converter)
-  components/            — drop zone, settings panel, comparison, offline status
+  components/            — drop zone, settings panel, comparison, crop editor, offline status
   lib/
     ffmpeg.ts            — ffmpeg.wasm loading, task queue, media probing
     heic.ts              — HEIC/HEIF detection and decoding (libheif via heic-to)

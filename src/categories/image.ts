@@ -119,9 +119,11 @@ export const imageCategory: Category = {
       label: 'opt.strip',
     },
   ],
-  buildArgs: ({ input, format, options }) => {
+  buildArgs: ({ input, format, options, crop }) => {
     const args = ['-i', input];
     const filters: string[] = [];
+    // Crop first, so resizing applies to the cropped area.
+    if (crop) filters.push(`crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}`);
     const scale = scaleFilter(options);
     if (scale) filters.push(scale);
     const q = Number(options.quality);

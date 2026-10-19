@@ -207,6 +207,25 @@ export const en: Dict = {
   'opt.merge.hint': 'In the order of the file list',
   'docs.mergedName': 'merged',
 
+  // --- Crop
+  'crop.title': 'Crop',
+  'crop.free': 'Free',
+  'crop.original': 'Original',
+  'crop.aspect': 'Aspect ratio',
+  'crop.x': 'X',
+  'crop.y': 'Y',
+  'crop.w': 'Width',
+  'crop.h': 'Height',
+  'crop.source': 'Source: {w} × {h} px',
+  'crop.reset': 'Reset',
+  'crop.cancel': 'Cancel',
+  'crop.apply': 'Apply',
+  'crop.hints':
+    'Drag the corners and edges, move the frame, or draw a new one. Shift — keep proportions. Arrows — nudge by 1 px (Shift — 10). Enter — apply, Esc — close.',
+  'job.crop': 'Crop',
+  'job.cropTitle': 'Crop the photo before converting',
+  'job.cropped': 'Crop {w} × {h}',
+
   // --- Errors
   'err.load': 'Could not load {url}: {status}',
   'err.ffmpegCode': 'ffmpeg exited with code {code}',

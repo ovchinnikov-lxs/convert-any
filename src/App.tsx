@@ -4,6 +4,7 @@ import { extOf } from './categories/document';
 import { parseTime } from './categories/video';
 import type { Category, Options, OptionValue } from './categories/types';
 import { CompareViewer, type CompareItem } from './components/CompareViewer';
+import { CropEditor, type Crop } from './components/CropEditor';
 import { Dropzone } from './components/Dropzone';
 import { OfflineStatus } from './components/OfflineStatus';
 import { OptionsPanel } from './components/OptionsPanel';
@@ -40,6 +41,8 @@ interface Job {
   media?: MediaInfo;
   /** Non-fatal note about the result (e.g. it didn't get smaller). */
   warning?: Key;
+  /** Crop rectangle (images), in source pixels. */
+  crop?: Crop;
 }
 
 type EngineState = { state: 'idle' | 'loading' | 'ready' | 'error'; progress: number; error?: string };
@@ -61,6 +64,7 @@ export default function App() {
   const [engine, setEngine] = useState<EngineState>({ state: 'idle', progress: 0 });
   const [busy, setBusy] = useState(false);
   const [compare, setCompare] = useState<CompareItem | null>(null);
+  const [cropping, setCropping] = useState<{ job: Job; display?: Blob } | null>(null);
   const cancelled = useRef(false);
   /** HEIC sources decoded to PNG once, on add — reused for the thumbnail, conversion and comparison. */
   const heicDecodes = useRef(new Map<number, Promise<File>>());
@@ -198,7 +202,15 @@ export default function App() {
         outName: `result.${fmt.ext}`,
         probe: cat.needsDuration,
         args: (input, info) =>
-          cat.buildArgs!({ input, file, format: fmt, options: opts, duration: info.duration, media: info }),
+          cat.buildArgs!({
+            input,
+            file,
+            format: fmt,
+            options: opts,
+            duration: info.duration,
+            media: info,
+            crop: job.crop,
+          }),
         onProgress: (p) => patchJob(job.id, { progress: p }),
       });
 
@@ -382,8 +394,18 @@ export default function App() {
                       resultName: r.name,
                       offset: r.offset,
                       fps: r.fps,
+                      crop: job.crop,
                     });
                   }}
+                  onCrop={
+                    job.categoryId === 'image'
+                      ? async () =>
+                          setCropping({
+                            job,
+                            display: job.heic ? await heicDecodes.current.get(job.id)?.catch(() => undefined) : undefined,
+                          })
+                      : undefined
+                  }
                 />
               ))}
             </ul>
@@ -454,6 +476,22 @@ export default function App() {
       </main>
 
       {compare && <CompareViewer item={compare} engineFree={!busy} onClose={() => setCompare(null)} />}
+      {cropping && (
+        <CropEditor
+          file={cropping.job.file}
+          display={cropping.display}
+          initial={cropping.job.crop}
+          engineFree={!busy}
+          onClose={() => setCropping(null)}
+          onApply={(crop) => {
+            const job = cropping.job;
+            // The old result no longer matches: the file goes back to the queue.
+            if (job.result) URL.revokeObjectURL(job.result.url);
+            patchJob(job.id, { crop: crop ?? undefined, status: 'queued', result: undefined, error: undefined });
+            setCropping(null);
+          }}
+        />
+      )}
 
       <footer className="footer">
         {t('app.footerPowered')}{' '}
@@ -492,12 +530,15 @@ function JobRow({
   onRemove,
   onRetry,
   onCompare,
+  onCrop,
 }: {
   job: Job;
   busy: boolean;
   onRemove: () => void;
   onRetry: () => void;
   onCompare: () => void;
+  /** Present for images: opens the crop editor. */
+  onCrop?: () => void;
 }) {
   const comparable =
     job.result && ['image', 'video'].includes(job.categoryId) && !job.result.blob.type.startsWith('audio/');
@@ -541,6 +582,7 @@ function JobRow({
           )}
           {job.status === 'running' && <> · {Math.round(job.progress * 100)}%</>}
           {job.status === 'queued' && busy && <> · {t('job.queued')}</>}
+          {job.crop && <span className="tag-crop"> ✂ {t('job.cropped', { w: job.crop.w, h: job.crop.h })}</span>}
         </div>
         {job.status === 'running' && (
           <div className="bar">
@@ -552,6 +594,16 @@ function JobRow({
         {job.error && <div className="job-error">{job.error}</div>}
       </div>
       <div className="job-actions">
+        {onCrop && job.status !== 'running' && (
+          <button
+            className={`btn ghost small${job.crop ? ' on' : ''}`}
+            onClick={onCrop}
+            disabled={busy}
+            title={t('job.cropTitle')}
+          >
+            ✂ {t('job.crop')}
+          </button>
+        )}
         {comparable && (
           <button className="btn ghost small" onClick={onCompare} title={t('job.compareTitle')}>
             {t('job.compare')}

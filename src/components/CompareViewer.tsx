@@ -17,6 +17,8 @@ export interface CompareItem {
   offset: number;
   /** Frame rate of the result, used for frame stepping. */
   fps: number;
+  /** Crop applied to the result: the original is shown cropped the same way. */
+  crop?: { x: number; y: number; w: number; h: number };
 }
 
 type Mode = 'split' | 'toggle' | 'side';
@@ -286,8 +288,8 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
     const style = transformFor() ?? { visibility: 'hidden' as const };
     const report = (w: number, h: number) => {
       setDims((d) => ({ ...d, [which]: `${w}×${h}` }));
-      // The original defines the canvas; the result is stretched over it to line up pixels.
-      if (which === 'before') setBox({ w, h });
+      // The original (or its cropped part) defines the canvas; the result is stretched over it to line up pixels.
+      if (which === 'before') setBox(item.crop ? { w: item.crop.w, h: item.crop.h } : { w, h });
     };
     if (item.kind === 'video') {
       return (
@@ -306,15 +308,27 @@ export function CompareViewer({ item, engineFree, onClose }: Props) {
         />
       );
     }
-    return (
+    const img = (
       <img
-        className="cmp-media"
+        className={item.crop && which === 'before' ? 'cmp-cropped-img' : 'cmp-media'}
         src={src}
-        style={style}
+        style={
+          item.crop && which === 'before'
+            ? { left: -item.crop.x, top: -item.crop.y, imageRendering: 'imageRendering' in style ? style.imageRendering : undefined }
+            : style
+        }
         alt=""
         draggable={false}
         onLoad={(e) => report(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
       />
+    );
+    // Cropped original: a crop-sized window onto the full image.
+    return item.crop && which === 'before' ? (
+      <div className="cmp-media cmp-crop-window" style={style}>
+        {img}
+      </div>
+    ) : (
+      img
     );
   };
 

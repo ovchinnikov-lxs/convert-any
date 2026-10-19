@@ -208,6 +208,25 @@ export const ru = {
   'opt.merge.hint': 'В порядке списка файлов',
   'docs.mergedName': 'объединённый',
 
+  // --- Crop
+  'crop.title': 'Обрезка',
+  'crop.free': 'Свободно',
+  'crop.original': 'Как у фото',
+  'crop.aspect': 'Пропорции',
+  'crop.x': 'X',
+  'crop.y': 'Y',
+  'crop.w': 'Ширина',
+  'crop.h': 'Высота',
+  'crop.source': 'Исходник: {w} × {h} px',
+  'crop.reset': 'Сбросить',
+  'crop.cancel': 'Отмена',
+  'crop.apply': 'Применить',
+  'crop.hints':
+    'Тяните углы и стороны рамки, двигайте её целиком или нарисуйте новую. Shift — сохранить пропорции. Стрелки — сдвиг на 1 px (с Shift — на 10). Enter — применить, Esc — закрыть.',
+  'job.crop': 'Обрезать',
+  'job.cropTitle': 'Обрезать фото перед конвертацией',
+  'job.cropped': 'Обрезка {w} × {h}',
+
   // --- Errors
   'err.load': 'Не удалось загрузить {url}: {status}',
   'err.ffmpegCode': 'ffmpeg завершился с кодом {code}',
