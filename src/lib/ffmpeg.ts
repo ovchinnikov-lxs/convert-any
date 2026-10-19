@@ -203,19 +203,36 @@ async function withInput<T>(ff: FFmpeg, file: File, fn: (inputPath: string) => P
   }
 }
 
+/**
+ * Safety net: ffmpeg prints progress several times a second while it works,
+ * so this long a silence means it is stuck. The instance is then killed and
+ * `runFFmpeg` retries on the single-threaded core.
+ */
+const STALL_MS = 60_000;
+
 async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOptions): Promise<RunResult> {
   const ff = await loadFFmpeg();
   const outPath = `/out${++jobCounter}_${outName}`;
+  let lastActivity = Date.now();
+  let stalled = false;
+  const watchdog = setInterval(() => {
+    if (Date.now() - lastActivity > STALL_MS) {
+      stalled = true;
+      terminateFFmpeg();
+    }
+  }, 2000);
 
   return withInput(ff, file, async (inputPath) => {
     const logs: string[] = [];
     const logHandler = ({ message }: { message: string }) => {
+      lastActivity = Date.now();
       logs.push(message);
       if (logs.length > 200) logs.shift();
       onLog?.(message);
       if ((globalThis as { __ffdebug?: boolean }).__ffdebug) console.debug('[ffmpeg]', message);
     };
     const progressHandler = ({ progress }: { progress: number }) => {
+      lastActivity = Date.now();
       if (Number.isFinite(progress)) onProgress?.(Math.min(1, Math.max(0, progress)));
     };
     ff.on('log', logHandler);
@@ -236,7 +253,11 @@ async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOpt
       const data = await ff.readFile(outPath);
       if (typeof data === 'string' || data.length === 0) throw new LocalizedError('err.empty');
       return { data, info };
+    } catch (e) {
+      if (stalled) throw new LocalizedError('err.stalled');
+      throw e;
     } finally {
+      clearInterval(watchdog);
       ff.off('log', logHandler);
       ff.off('progress', progressHandler);
       await ff.deleteFile(outPath).catch(() => {});
@@ -245,21 +266,32 @@ async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOpt
 }
 
 /**
- * The multi-threaded core crashes with ffmpeg's own frame threading in the decoder
- * and with more than 4 x264 threads, but is stable (and ~2.3× faster) with a
- * single-threaded decoder and x264's internal threads capped at 4.
+ * Thread limits for the multi-threaded core. Its pthread pool has a fixed size,
+ * while ffmpeg sizes its own thread counts from the CPU count: on machines with
+ * many cores (e.g. 8–16 on a Mac) the scaler, filters or encoder ask for more
+ * threads than the pool has and ffmpeg waits forever ("stuck at 100%").
+ * So every kind of threading is capped explicitly:
+ * - the decoder runs single-threaded (its frame threading also crashes the core);
+ * - filters / scaling and the encoder use at most 4 threads;
+ * - x264 uses its internal threads, capped at 4 (≈2.3× faster than single-threaded).
  */
+const MAX_THREADS = 4;
+
 function adaptForThreads(args: string[]): string[] {
   if (!useMT) return args;
+  const n = String(Math.max(1, Math.min(MAX_THREADS, navigator.hardwareConcurrency || 2)));
   const out = [...args];
   const firstInput = out.indexOf('-i');
   if (firstInput >= 0) out.splice(firstInput, 0, '-threads', '1');
+  // Global options go before the inputs.
+  out.unshift('-filter_threads', n, '-filter_complex_threads', n);
   if (out.includes('libx264')) {
-    const n = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
     const p = out.indexOf('-x264-params');
     if (p >= 0) out[p + 1] += `:threads=${n}`;
     else out.push('-x264-params', `threads=${n}`);
   }
+  // Output option (applies to the encoder): must come after the last input.
+  out.push('-threads', n);
   return out;
 }
 

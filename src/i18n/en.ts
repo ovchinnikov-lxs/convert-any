@@ -236,5 +236,6 @@ export const en: Dict = {
   'err.pageRangeEmpty': 'The document has {count} page(s), the range “{spec}” is empty',
   'err.unsupported': 'The .{ext} format is not supported',
   'err.noConverter': 'No converter for .{ext} → {format}',
+  'err.stalled': 'ffmpeg stopped responding — the conversion was aborted',
   'err.heic': 'Could not read the HEIC file: {detail}',
 };

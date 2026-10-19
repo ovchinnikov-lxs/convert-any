@@ -237,6 +237,7 @@ export const ru = {
   'err.pageRangeEmpty': 'В документе {count} стр., диапазон «{spec}» пуст',
   'err.unsupported': 'Формат .{ext} не поддерживается',
   'err.noConverter': 'Нет конвертера .{ext} → {format}',
+  'err.stalled': 'ffmpeg перестал отвечать — конвертация прервана',
   'err.heic': 'Не удалось прочитать HEIC: {detail}',
 } as const;
 
