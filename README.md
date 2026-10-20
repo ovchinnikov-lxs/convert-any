@@ -123,3 +123,8 @@ there is no multi-threaded ffmpeg (the site still works on the single-threaded c
 - Scans without a text layer yield empty text (no OCR yet).
 - From multi-image HEIC files (bursts, Live Photos) only the main still image is converted;
   HDR / 10-bit photos are converted to regular 8-bit color.
+
+## Author
+
+Made by **Aleksandr Ovchinnikov** — [ovchinnikov-lxs.github.io](https://ovchinnikov-lxs.github.io) ·
+[GitHub](https://github.com/ovchinnikov-lxs)

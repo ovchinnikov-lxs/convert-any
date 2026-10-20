@@ -350,3 +350,13 @@ kbd {
 .crop-src { font-size: 12px; color: #7d8496; margin-right: 6px; }
 .tag-crop { color: var(--accent); font-weight: 600; }
 .btn.ghost.small.on { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- Author / repository links ---------- */
+.gh-link {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+}
+.gh-link:hover { border-color: var(--accent); color: var(--accent); }
+.footer-author { margin-top: 8px; display: flex; gap: 6px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.footer-author a { display: inline-flex; align-items: center; gap: 4px; }
+.footer-author .dot { opacity: 0.6; }

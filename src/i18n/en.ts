@@ -23,6 +23,11 @@ export const en: Dict = {
   'app.engineError': 'Could not load the engine: {error}',
   'app.footerPowered': 'Powered by',
   'app.footerAnd': 'and',
+  'app.author': 'Made by',
+  'app.authorName': 'Aleksandr Ovchinnikov',
+  'app.authorSite': "Author's website",
+  'app.sourceCode': 'Source code',
+  'app.repoTitle': 'Source code on GitHub — the project is open source',
   'app.footerLocal': 'Everything is processed locally — no servers, no uploads.',
 
   // --- File list

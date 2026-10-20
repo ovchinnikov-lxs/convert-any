@@ -24,6 +24,11 @@ export const ru = {
   'app.engineError': 'Не удалось загрузить движок: {error}',
   'app.footerPowered': 'Работает на',
   'app.footerAnd': 'и',
+  'app.author': 'Автор —',
+  'app.authorName': 'Александр Овчинников',
+  'app.authorSite': 'Сайт автора',
+  'app.sourceCode': 'Исходный код',
+  'app.repoTitle': 'Исходный код на GitHub — проект открытый',
   'app.footerLocal': 'Вся обработка выполняется локально — без серверов и загрузок.',
 
   // --- File list

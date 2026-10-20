@@ -2,6 +2,13 @@
   "name": "convert-any",
   "private": true,
   "version": "0.1.0",
+  "description": "In-browser image, video and document converter — nothing is uploaded",
+  "author": "Aleksandr Ovchinnikov (https://ovchinnikov-lxs.github.io)",
+  "homepage": "https://convert-any-one.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ovchinnikov-lxs/convert-any.git"
+  },
   "type": "module",
   "scripts": {
     "copy-ffmpeg": "node scripts/copy-ffmpeg.mjs",
