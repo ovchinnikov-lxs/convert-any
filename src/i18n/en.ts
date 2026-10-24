@@ -109,7 +109,8 @@ export const en: Dict = {
 
   // --- Categories
   'cat.image.title': 'Images',
-  'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO, HEIC — change format, compress, resize',
+  'cat.image.desc':
+    'PNG, JPG, WebP, GIF, BMP, TIFF, ICO, HEIC — change format, compress (animated WebP, PNG and GIF too), resize',
   'cat.image.note': 'iPhone photos (HEIC/HEIF) → JPG, PNG, WebP and more — in any browser',
   'cat.video.title': 'Video',
   'cat.video.desc': 'MP4, WebM, MOV, MKV, AVI, GIF, audio extraction — compress, trim, change resolution',
@@ -117,8 +118,8 @@ export const en: Dict = {
   'cat.docs.desc': 'PDF, DOCX, Markdown, HTML, TXT, XLSX/ODS/CSV spreadsheets — convert, compress and merge PDFs',
 
   // --- Format hints
-  'hint.webp': 'Lightweight format for the web',
-  'hint.png': 'Lossless, with transparency',
+  'hint.webp': 'Lightweight format for the web, keeps animation',
+  'hint.png': 'Lossless, with transparency; animation → APNG',
   'hint.jpg': 'Photos, no transparency',
   'hint.gif': '256 colors, animation',
   'hint.ico': 'Icon, up to 256×256',
@@ -153,6 +154,12 @@ export const en: Dict = {
   'opt.width': 'Width',
   'opt.height': 'Height',
   'opt.auto': 'auto',
+  'opt.colors': 'Colors',
+  'opt.colors.full': 'All colors (lossless)',
+  'opt.colors.n': '{n} colors',
+  'opt.colors.hint': 'Fewer colors — much smaller PNG and APNG (like pngquant). Semi-transparent edges become hard (transparent or not)',
+  'opt.animFps': 'Frames per second',
+  'opt.animFps.hint': 'For animations: fewer frames — smaller file',
   'opt.strip': 'Remove metadata (EXIF, GPS)',
 
   // --- Options: video
@@ -227,6 +234,8 @@ export const en: Dict = {
   'crop.apply': 'Apply',
   'crop.hints':
     'Drag the corners and edges, move the frame, or draw a new one. Shift — keep proportions. Arrows — nudge by 1 px (Shift — 10). Enter — apply, Esc — close.',
+  'job.anim': 'animated, {n} frames',
+  'job.animTitle': 'The animation is kept in WebP, PNG (APNG) and GIF; JPG, BMP, TIFF and ICO get the first frame',
   'job.crop': 'Crop',
   'job.cropTitle': 'Crop the photo before converting',
   'job.cropped': 'Crop {w} × {h}',

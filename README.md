@@ -23,7 +23,10 @@ Site: https://convert-any-one.vercel.app
   proportions), or type exact X / Y / width / height in pixels — the frame and the numbers stay in
   sync. Aspect presets: free, original, 1:1, 4:3, 3:4, 3:2, 16:9, 9:16. Arrow keys nudge the frame.
   The crop is applied before resizing and also shown in the before/after view.
-- Metadata removal (EXIF, GPS). Animated GIF → animated WebP.
+- Metadata removal (EXIF, GPS).
+- **Animated WebP, APNG and GIF**: compress and convert between each other with the animation kept —
+  every frame keeps its exact duration. Options: quality, palette reduction (PNG/APNG, 256…16
+  colors, like pngquant), lower frame rate. Converting an animation to JPG/BMP/… takes the first frame.
 - Other formats ffmpeg can't read (e.g. AVIF) fall back to the browser's own decoder.
 
 ### Video
@@ -62,6 +65,8 @@ src/
   lib/
     ffmpeg.ts            — ffmpeg.wasm loading, task queue, media probing
     heic.ts              — HEIC/HEIF detection and decoding (libheif via heic-to)
+    animation.ts         — animated WebP/APNG/GIF detection, animated WebP decoding
+    apng.ts              — APNG writer (indexed / RGB / RGBA, changed-rectangle frames)
     preview.ts           — previews for formats the browser can't display
     docs/                — pdf.js, pdf-lib, pdfmake, mammoth, SheetJS
   i18n/                  — localization: ru.ts (main dictionary), en.ts
@@ -121,6 +126,8 @@ there is no multi-threaded ffmpeg (the site still works on the single-threaded c
 - PDF → DOCX is not supported (only server-side tools do it well). Complex DOCX layout
   (headers/footers, columns, text wrapping) is simplified when converting to PDF.
 - Scans without a text layer yield empty text (no OCR yet).
+- ffmpeg.wasm has no animated WebP decoder, so those are decoded frame by frame in JavaScript
+  (browser WebP decoder + canvas compositing) before ffmpeg gets them.
 - From multi-image HEIC files (bursts, Live Photos) only the main still image is converted;
   HDR / 10-bit photos are converted to regular 8-bit color.
 

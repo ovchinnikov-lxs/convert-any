@@ -114,6 +114,8 @@ export interface RunResult {
 
 export interface RunOptions {
   file: File;
+  /** Files placed in the same folder as `file` (e.g. the frames an ffconcat list refers to). */
+  extraFiles?: File[];
   outName: string;
   /** Probe the input first (duration, bitrates…) and pass it to `args`. */
   probe?: boolean;
@@ -175,31 +177,34 @@ export function probeMedia(file: File): Promise<MediaInfo> {
   });
 }
 
-async function withInput<T>(ff: FFmpeg, file: File, fn: (inputPath: string) => Promise<T>): Promise<T> {
+async function withInput<T>(
+  ff: FFmpeg,
+  file: File,
+  fn: (inputPath: string) => Promise<T>,
+  extraFiles: File[] = [],
+): Promise<T> {
   const job = ++jobCounter;
   const mountDir = `/in${job}`;
-  let inputPath: string;
+  const all = [file, ...extraFiles];
+  await ff.createDir(mountDir);
   let mounted = false;
-  // WORKERFS reads the file lazily instead of copying it into wasm memory,
+  let written: string[] = [];
+  // WORKERFS reads the files lazily instead of copying them into wasm memory,
   // which matters a lot for big videos.
   try {
-    await ff.createDir(mountDir);
-    await ff.mount(FFFSType.WORKERFS, { files: [file] }, mountDir);
-    inputPath = `${mountDir}/${file.name}`;
+    await ff.mount(FFFSType.WORKERFS, { files: all }, mountDir);
     mounted = true;
   } catch {
-    inputPath = `/in${job}_${sanitize(file.name)}`;
-    await ff.writeFile(inputPath, new Uint8Array(await file.arrayBuffer()));
+    written = all.map((f) => `${mountDir}/${f === file ? sanitize(f.name) : f.name}`);
+    for (const [i, f] of all.entries()) await ff.writeFile(written[i], new Uint8Array(await f.arrayBuffer()));
   }
+  const inputPath = mounted ? `${mountDir}/${file.name}` : written[0];
   try {
     return await fn(inputPath);
   } finally {
-    if (mounted) {
-      await ff.unmount(mountDir).catch(() => {});
-      await ff.deleteDir(mountDir).catch(() => {});
-    } else {
-      await ff.deleteFile(inputPath).catch(() => {});
-    }
+    if (mounted) await ff.unmount(mountDir).catch(() => {});
+    else for (const p of written) await ff.deleteFile(p).catch(() => {});
+    await ff.deleteDir(mountDir).catch(() => {});
   }
 }
 
@@ -210,7 +215,7 @@ async function withInput<T>(ff: FFmpeg, file: File, fn: (inputPath: string) => P
  */
 const STALL_MS = 60_000;
 
-async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOptions): Promise<RunResult> {
+async function runOnce({ file, extraFiles, outName, probe, args, onProgress, onLog }: RunOptions): Promise<RunResult> {
   const ff = await loadFFmpeg();
   const outPath = `/out${++jobCounter}_${outName}`;
   let lastActivity = Date.now();
@@ -262,7 +267,7 @@ async function runOnce({ file, outName, probe, args, onProgress, onLog }: RunOpt
       ff.off('progress', progressHandler);
       await ff.deleteFile(outPath).catch(() => {});
     }
-  });
+  }, extraFiles);
 }
 
 /**

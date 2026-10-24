@@ -110,7 +110,8 @@ export const ru = {
 
   // --- Categories
   'cat.image.title': 'Изображения',
-  'cat.image.desc': 'PNG, JPG, WebP, GIF, BMP, TIFF, ICO, HEIC — смена формата, сжатие, изменение размера',
+  'cat.image.desc':
+    'PNG, JPG, WebP, GIF, BMP, TIFF, ICO, HEIC — смена формата, сжатие (в том числе анимированных WebP, PNG и GIF), изменение размера',
   'cat.image.note': 'Фото с iPhone (HEIC/HEIF) → JPG, PNG, WebP и другие форматы — в любом браузере',
   'cat.video.title': 'Видео',
   'cat.video.desc': 'MP4, WebM, MOV, MKV, AVI, GIF, извлечение звука — сжатие, обрезка, смена разрешения',
@@ -118,8 +119,8 @@ export const ru = {
   'cat.docs.desc': 'PDF, DOCX, Markdown, HTML, TXT, таблицы XLSX/ODS/CSV — конвертация, сжатие и объединение PDF',
 
   // --- Format hints
-  'hint.webp': 'Лёгкий формат для веба',
-  'hint.png': 'Без потерь, с прозрачностью',
+  'hint.webp': 'Лёгкий формат для веба, сохраняет анимацию',
+  'hint.png': 'Без потерь, с прозрачностью; анимация → APNG',
   'hint.jpg': 'Фото, без прозрачности',
   'hint.gif': '256 цветов, анимация',
   'hint.ico': 'Иконка, максимум 256×256',
@@ -154,6 +155,12 @@ export const ru = {
   'opt.width': 'Ширина',
   'opt.height': 'Высота',
   'opt.auto': 'авто',
+  'opt.colors': 'Цвета',
+  'opt.colors.full': 'Все цвета (без потерь)',
+  'opt.colors.n': '{n} цветов',
+  'opt.colors.hint': 'Меньше цветов — намного легче PNG и APNG (как pngquant). Полупрозрачные края станут чёткими (прозрачно или нет)',
+  'opt.animFps': 'Кадров в секунду',
+  'opt.animFps.hint': 'Для анимаций: меньше кадров — меньше файл',
   'opt.strip': 'Удалить метаданные (EXIF, GPS)',
 
   // --- Options: video
@@ -228,6 +235,8 @@ export const ru = {
   'crop.apply': 'Применить',
   'crop.hints':
     'Тяните углы и стороны рамки, двигайте её целиком или нарисуйте новую. Shift — сохранить пропорции. Стрелки — сдвиг на 1 px (с Shift — на 10). Enter — применить, Esc — закрыть.',
+  'job.anim': 'анимация, кадров: {n}',
+  'job.animTitle': 'Анимация сохранится в WebP, PNG (APNG) и GIF; в JPG, BMP, TIFF и ICO попадёт первый кадр',
   'job.crop': 'Обрезать',
   'job.cropTitle': 'Обрезать фото перед конвертацией',
   'job.cropped': 'Обрезка {w} × {h}',

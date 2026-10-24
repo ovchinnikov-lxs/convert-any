@@ -11,6 +11,7 @@ import { ABOUT } from './about';
 import { OptionsPanel } from './components/OptionsPanel';
 import { LocalizedError, setLang, t, useLang, type Key, type Lang } from './i18n';
 import { isFFmpegLoaded, loadFFmpeg, runFFmpeg, cancelFFmpeg, probeMedia, type MediaInfo } from './lib/ffmpeg';
+import { animatedWebpToSequence, detectAnimation, type AnimationInfo } from './lib/animation';
 import { heicToPng, isHeic } from './lib/heic';
 import { baseName, browserDecodeToPng, downloadBlob, formatBytes } from './lib/utils';
 
@@ -44,6 +45,8 @@ interface Job {
   warning?: Key;
   /** Crop rectangle (images), in source pixels. */
   crop?: Crop;
+  /** Set for animated WebP / APNG / GIF sources. */
+  animation?: AnimationInfo;
 }
 
 type EngineState = { state: 'idle' | 'loading' | 'ready' | 'error'; progress: number; error?: string };
@@ -74,7 +77,12 @@ export default function App() {
   const { format, options } = settings[categoryId];
   const categoryJobs = useMemo(() => jobs.filter((j) => j.categoryId === categoryId), [jobs, categoryId]);
   const sourceJobs = useMemo(() => categoryJobs.filter((j) => !j.merged), [categoryJobs]);
-  const inputs = useMemo(() => new Set(sourceJobs.map((j) => extOf(j.file.name))), [sourceJobs]);
+  /** Extensions of the added files, plus 'anim' when any of them is an animation. */
+  const inputs = useMemo(() => {
+    const set = new Set(sourceJobs.map((j) => extOf(j.file.name)));
+    if (sourceJobs.some((j) => j.animation)) set.add('anim');
+    return set;
+  }, [sourceJobs]);
   const usesFFmpeg = Boolean(category.buildArgs && !category.convert);
   /** Whether the format can be produced from a file with this extension. */
   const compatible = (fmtId: string, ext: string) => {
@@ -113,6 +121,11 @@ export default function App() {
           : undefined,
     }));
     setJobs((js) => [...js, ...added]);
+    // Animated WebP / APNG / GIF: mark them, so the animation options show up.
+    if (categoryId === 'image') {
+      for (const job of added)
+        void detectAnimation(job.file).then((animation) => animation && patchJob(job.id, { animation }));
+    }
     // HEIC (iPhone photos): browsers other than Safari can't read it, so decode it right away.
     if (categoryId === 'image' || categoryId === 'docs') {
       for (const job of added) {
@@ -197,9 +210,24 @@ export default function App() {
 
     const outName = `${baseName(job.file.name)}.${fmt.ext}`;
 
-    const run = (file: File) =>
+    // Animations: APNG needs its demuxer named explicitly; animated WebP (which ffmpeg
+    // can't decode) is turned into a PNG frame sequence first.
+    const animation = cat.id === 'image' ? (job.animation ?? (await detectAnimation(source))) : null;
+    let input: { file: File; extraFiles?: File[]; inputArgs?: string[] } = { file: source };
+    if (animation?.kind === 'webp') {
+      const seq = await animatedWebpToSequence(source, (p) => patchJob(job.id, { progress: p * 0.3 }));
+      input = { file: seq.list, extraFiles: seq.frames, inputArgs: ['-f', 'concat', '-safe', '0'] };
+    } else if (animation?.kind === 'apng') {
+      input = { file: source, inputArgs: ['-f', 'apng'] };
+    }
+
+    const logs: string[] = [];
+    const run = ({ file, extraFiles, inputArgs }: typeof input) =>
       runFFmpeg({
         file,
+        extraFiles,
+        // Kept for the category's post-processing (progress lines aren't needed).
+        onLog: cat.postProcess ? (l) => !l.startsWith('frame=') && logs.push(l) : undefined,
         outName: `result.${fmt.ext}`,
         probe: cat.needsDuration,
         args: (input, info) =>
@@ -211,6 +239,10 @@ export default function App() {
             duration: info.duration,
             media: info,
             crop: job.crop,
+            inputArgs,
+            animated: Boolean(animation),
+            lastFrameMs: animation?.lastDuration,
+            animDuration: animation?.duration,
           }),
         onProgress: (p) => patchJob(job.id, { progress: p }),
       });
@@ -218,13 +250,24 @@ export default function App() {
     let data: Uint8Array;
     let info: MediaInfo = {};
     try {
-      ({ data, info } = await run(source));
+      ({ data, info } = await run(input));
     } catch (err) {
       // ffmpeg.wasm can't decode some image formats (e.g. AVIF) — let the browser decode them.
       if (cat.id !== 'image' || cancelled.current || source !== job.file) throw err;
       const decoded = await browserDecodeToPng(job.file).catch(() => null);
       if (!decoded) throw err;
-      ({ data } = await run(decoded).catch(() => Promise.reject(err)));
+      ({ data } = await run({ file: decoded }).catch(() => Promise.reject(err)));
+    }
+    if (cat.postProcess) {
+      data = await cat.postProcess({
+        data,
+        logs,
+        format: fmt,
+        options: opts,
+        animated: Boolean(animation),
+        lastFrameMs: animation?.lastDuration,
+        animDuration: animation?.duration,
+      });
     }
 
     const blob = new Blob([data as BlobPart], { type: fmt.mime });
@@ -607,6 +650,12 @@ function JobRow({
           )}
           {job.status === 'running' && <> · {Math.round(job.progress * 100)}%</>}
           {job.status === 'queued' && busy && <> · {t('job.queued')}</>}
+          {job.animation && (
+            <span className="tag-anim" title={t('job.animTitle')}>
+              {' '}
+              ▶ {t('job.anim', { n: job.animation.frames })}
+            </span>
+          )}
           {job.crop && <span className="tag-crop"> ✂ {t('job.cropped', { w: job.crop.w, h: job.crop.h })}</span>}
         </div>
         {job.status === 'running' && (

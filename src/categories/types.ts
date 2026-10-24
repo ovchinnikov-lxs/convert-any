@@ -52,6 +52,26 @@ export interface BuildContext {
   media?: MediaInfo;
   /** Crop rectangle in source pixels (images), applied before any resizing. */
   crop?: { x: number; y: number; w: number; h: number };
+  /** Input options placed before `-i` (e.g. `-f apng`, `-f concat` for a frame sequence). */
+  inputArgs?: string[];
+  /** The source is an animation (animated WebP / APNG / GIF). */
+  animated?: boolean;
+  /** Duration of the source's last frame, ms (animations). */
+  lastFrameMs?: number;
+  /** Total duration of one loop of the source animation, ms. */
+  animDuration?: number;
+}
+
+/** What `Category.postProcess` gets after ffmpeg has finished. */
+export interface PostProcessContext {
+  data: Uint8Array;
+  /** ffmpeg log lines of the conversion. */
+  logs: string[];
+  format: FormatDef;
+  options: Options;
+  animated: boolean;
+  lastFrameMs?: number;
+  animDuration?: number;
 }
 
 /** Everything a custom (non-ffmpeg) converter needs. */
@@ -85,6 +105,8 @@ export interface Category {
   fields: FieldDef[];
   /** ffmpeg arguments (including `-i`), without the output path. */
   buildArgs?: (ctx: BuildContext) => string[];
+  /** Optional step after ffmpeg (e.g. assembling or fixing up an animation). */
+  postProcess?: (ctx: PostProcessContext) => Promise<Uint8Array>;
   /** Custom (non-ffmpeg) converter. Used instead of `buildArgs` when present. */
   convert?: (ctx: ConvertContext) => Promise<ConvertOutput>;
   /** Combines several results into one file (e.g. merge PDFs), when `canMerge` says so. */
